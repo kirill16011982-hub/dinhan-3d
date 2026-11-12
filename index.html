@@ -52,6 +52,32 @@
   #steps b { margin-left:auto; color:#F6C177; font-weight:700; white-space:nowrap; }
   body.dark #title h1 { color:#fff; } body.dark #title p, body.dark #hint { color:#C9D3DC; }
   #err { left:50%; top:50%; transform:translate(-50%,-50%); padding:18px 22px; display:none; max-width:460px; font-size:14px; }
+  /* телефон: узкий экран — всё компактно, кнопки листаются пальцем, список этапов раскрывается по нажатию */
+  @media (max-width: 700px) {
+    #title { left:12px; top:10px; right:12px; }
+    #title h1 { font-size:19px; }
+    #title p { font-size:11px; margin-top:2px; }
+    #stats { left:0; right:0; top:52px; flex-direction:row; gap:6px; overflow-x:auto; padding:0 12px 4px; scrollbar-width:none; }
+    #stats::-webkit-scrollbar, #bar::-webkit-scrollbar { display:none; }
+    .stat { width:auto; flex:none; padding:5px 10px 6px; white-space:nowrap; }
+    .stat b { font-size:14px; } .stat span { font-size:10.5px; }
+    #bar { left:8px; right:8px; bottom:max(8px, env(safe-area-inset-bottom)); width:auto; max-width:none; flex-wrap:nowrap;
+      overflow-x:auto; justify-content:flex-start; padding:6px; gap:6px; scrollbar-width:none; }
+    button { font-size:13px; padding:8px 10px; }
+    #bShot, #hint { display:none !important; }
+    #steps, #legend { left:8px; bottom:calc(max(8px, env(safe-area-inset-bottom)) + 58px); width:auto; max-width:calc(100vw - 16px);
+      padding:8px 12px; }
+    #steps h3 { margin:0; font-size:12.5px; cursor:pointer; }
+    #steps h3::after { content:"  ▸ показать"; color:#F6C177; font-weight:600; }
+    #steps.open h3::after { content:"  ▾ скрыть"; }
+    #steps div { display:none; font-size:12px; }
+    #steps.open h3 { margin-bottom:4px; }
+    #steps.open div { display:flex; }
+    #info { left:8px; right:8px; top:auto; bottom:calc(max(8px, env(safe-area-inset-bottom)) + 58px); width:auto; padding:12px 14px; }
+    #info h2 { font-size:16px; } #info p { font-size:12.5px; }
+    #cap { left:8px; right:8px; bottom:120px; max-width:none; padding:10px 14px; }
+    #cap b { font-size:17px; } #cap span { font-size:12.5px; }
+  }
 </style>
 </head>
 <body>
@@ -1297,7 +1323,7 @@ const GRASS = canvasTex(128, 128, (g, w, h) => {
 const camera = new THREE.PerspectiveCamera(32, window.innerWidth / window.innerHeight, 4, 3000);
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true; controls.dampingFactor = 0.08;
-controls.maxPolarAngle = Math.PI * 0.49; controls.minDistance = 40; controls.maxDistance = 700;
+controls.maxPolarAngle = Math.PI * 0.49; controls.minDistance = 40; controls.maxDistance = 1000;
 controls.autoRotateSpeed = 0.7;
 
 scene.add(new THREE.HemisphereLight("#D6E4F2", "#6F7F52", 0.28));
@@ -2281,6 +2307,9 @@ let tween = null;
 function goTo(name, instant) {
   const [p, t] = VIEWS[name];
   const to = { p: new THREE.Vector3(...p), t: new THREE.Vector3(...t) };
+  // телефон стоит вертикально: кадр узкий, поэтому камера отходит дальше, чтобы фабрика влезла по ширине
+  const asp = window.innerWidth / window.innerHeight;
+  if (asp < 0.9 && !REELS && !CAPTURE) to.p.sub(to.t).multiplyScalar(Math.min(2.1, 0.9 / asp)).add(to.t);
   if (instant) { camera.position.copy(to.p); controls.target.copy(to.t); controls.update(); return; }
   tween = { fromP: camera.position.clone(), fromT: controls.target.clone(), to, t0: performance.now(), dur: 900 };
 }
@@ -2297,6 +2326,7 @@ let cutK = 0, cutTarget = 0;
 toggle("bCut", on => { cutTarget = on ? 1 : 0; });
 toggle("bDio", on => setDiorama(on));
 const stepsEl = document.getElementById("steps");
+stepsEl.querySelector("h3").addEventListener("click", () => stepsEl.classList.toggle("open"));
 function setProc(on) { procGroup.visible = on; stepsEl.style.display = on ? "block" : "none"; if (on) legendEl.style.display = "none"; else if (flowGroup.visible) legendEl.style.display = ""; }
 toggle("bProc", setProc);
 document.getElementById("bShot").addEventListener("click", () => {
