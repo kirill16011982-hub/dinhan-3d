@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Динь-Ан · живая карта</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+<style>
+/* раскладка: шапка с часами → карта во всю ширину слева, панель смены справа → три графика по суткам; на телефоне всё в одну колонку */
+:root {
+  --ground:#0B0D0F; --panel:#13161A; --raise:#1B1F24; --line:#2A2F36;
+  --paper:#EEEAE0; --muted:#9A9F98; --ember:#F0935A; --heat:#FF6A2B; --gold:#F2C14E; --steam:#7FC8D8; --leaf:#74C27A;
+  --display:"Oswald", "Arial Narrow", Impact, sans-serif;
+  --text:"Golos Text", "Helvetica Neue", Arial, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing:border-box; }
+html, body { margin:0; background:var(--ground); color:var(--paper); font-family:var(--text); font-size:14px; }
+body { padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px));
+  padding-block:max(14px, env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-bottom, 0px)); }
+.wrap { max-width:1500px; margin:0 auto; display:flex; flex-direction:column; gap:14px; }
+header { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:12px 20px; }
+.eyebrow { font-family:var(--display); font-weight:600; font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:var(--gold); }
+h1 { margin:2px 0 0; font-family:var(--display); font-weight:700; font-style:italic; font-size:clamp(34px, 6vw, 64px);
+  line-height:.95; letter-spacing:.01em; text-transform:uppercase; text-wrap:balance;
+  color:var(--paper); text-shadow:3px 3px 0 #000, 0 0 24px rgba(240,147,90,.25); }
+.sub { margin-top:6px; color:var(--muted); font-size:13px; max-width:60ch; }
+.tools { display:flex; flex-wrap:wrap; gap:8px; align-items:stretch; }
+.clock { border:1px solid var(--line); background:var(--panel); padding:6px 14px; display:flex; align-items:baseline; gap:10px; }
+.clock small { font-family:var(--display); color:var(--muted); font-size:13px; letter-spacing:.08em; text-transform:uppercase; }
+.clock b { font-family:var(--display); font-size:28px; font-weight:600; font-variant-numeric:tabular-nums; }
+.clock i { font-style:normal; font-family:var(--display); font-size:12px; color:var(--gold); letter-spacing:.1em; }
+.btn { font-family:var(--display); font-weight:600; font-size:14px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--paper); background:var(--panel); border:1px solid var(--line); padding:8px 14px; cursor:pointer; min-height:40px; }
+.btn:hover { border-color:var(--muted); }
+.btn.on { background:var(--gold); color:#121212; border-color:var(--gold); }
+.btn:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
+.main { display:grid; grid-template-columns:minmax(0, 1fr) 340px; gap:14px; }
+.mapbox { position:relative; border:1px solid var(--line); background:#0F1412; height:min(78vh, 860px); min-height:420px; overflow:hidden; touch-action:none; }
+#map { position:absolute; inset:0; width:100%; height:100%; display:block; cursor:grab; }
+#map.drag { cursor:grabbing; }
+#radar { position:absolute; right:12px; bottom:12px; width:150px; height:150px; border-radius:50%; pointer-events:none;
+  box-shadow:0 0 0 3px #000, 0 0 0 5px #3A3F46, 0 8px 20px rgba(0,0,0,.6); }
+.zoom { position:absolute; left:10px; bottom:10px; display:flex; flex-direction:column; gap:6px; }
+.zoom .btn { min-height:36px; width:40px; padding:0; font-size:18px; }
+.mapnote { position:absolute; left:10px; top:10px; font-family:var(--display); font-size:11.5px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--muted); background:rgba(11,13,15,.78); padding:5px 9px; border:1px solid var(--line); pointer-events:none; }
+#card { position:absolute; left:10px; top:44px; width:min(320px, calc(100% - 20px)); background:rgba(19,22,26,.96); border:1px solid var(--line);
+  border-left:4px solid var(--ember); padding:12px 14px; }
+#card .z { font-family:var(--display); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); }
+#card h3 { margin:3px 0 4px; font-family:var(--display); font-size:21px; font-weight:600; }
+#card .a { font-weight:600; font-size:13px; color:var(--gold); margin-bottom:6px; }
+#card p { margin:0; font-size:13px; line-height:1.45; color:#D6D2C7; }
+#card .live { margin-top:8px; font-family:var(--mono); font-size:12px; color:var(--steam); }
+#card .x { position:absolute; right:6px; top:4px; background:none; border:0; color:var(--muted); font-size:20px; cursor:pointer; padding:4px 8px; }
+aside { display:flex; flex-direction:column; gap:14px; min-width:0; }
+.panel { background:var(--panel); border:1px solid var(--line); }
+.panel h2 { margin:0; padding:9px 14px; font-family:var(--display); font-weight:600; font-size:14px; letter-spacing:.16em; text-transform:uppercase;
+  background:var(--raise); border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:10px; }
+.panel h2 span { color:var(--muted); font-weight:500; letter-spacing:.08em; }
+.tiles { display:grid; grid-template-columns:1fr 1fr; }
+.tile { padding:11px 14px; border-right:1px solid var(--line); border-bottom:1px solid var(--line); min-width:0; }
+.tile:nth-child(2n) { border-right:0; }
+.tile b { display:block; font-family:var(--display); font-size:26px; font-weight:600; font-variant-numeric:tabular-nums; line-height:1.1; }
+.tile span { font-size:12px; color:var(--muted); }
+.tile.hi b { color:var(--ember); }
+.shift { padding:10px 14px; font-size:13px; display:flex; flex-direction:column; gap:6px; }
+.shift .row { display:flex; justify-content:space-between; gap:10px; }
+.shift .row em { font-style:normal; color:var(--muted); }
+.pill { display:inline-block; font-family:var(--display); font-size:12px; letter-spacing:.08em; padding:1px 8px; border:1px solid currentColor; }
+.ok { color:var(--leaf); } .warn { color:var(--gold); } .hot { color:var(--heat); }
+#log { list-style:none; margin:0; padding:6px 0; max-height:300px; overflow-y:auto; }
+#log li { display:grid; grid-template-columns:48px 1fr; gap:8px; padding:5px 14px; font-size:12.5px; line-height:1.4; border-bottom:1px solid rgba(255,255,255,.04); }
+#log li time { font-family:var(--mono); color:var(--gold); font-size:12px; }
+#log li.new { background:rgba(240,147,90,.12); }
+.charts { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:14px; }
+.chart { height:170px; width:100%; display:block; }
+.foot { color:var(--muted); font-size:12px; line-height:1.5; max-width:110ch; }
+@media (max-width: 1000px) {
+  .main { grid-template-columns:minmax(0, 1fr); }
+  .charts { grid-template-columns:minmax(0, 1fr); }
+  .mapbox { height:clamp(380px, 112vw, 64vh); min-height:0; }
+  #radar { width:84px; height:84px; right:8px; bottom:8px; }
+  .zoom { left:6px; bottom:6px; gap:4px; } .zoom .btn { min-height:32px; width:34px; }
+  .mapnote { font-size:10px; }
+}
+@media (prefers-reduced-motion: reduce) { #log li.new { background:none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">Кокосовый уголь · Вьетнам · ЭЗ «Динь-Ан»</div>
+      <h1>Фабрика Динь-Ан</h1>
+      <div class="sub">Живая карта площадки: время вьетнамское, производство идёт по нормам финмодели. Фабрика строится — это симуляция, не данные с датчиков.</div>
+    </div>
+    <div class="tools">
+      <div class="clock"><small id="cDate">—</small><b id="cTime">--:--:--</b><i id="cSpeed">ЖИВОЕ</i></div>
+      <button class="btn on" id="s1" data-s="1">Живое время</button>
+      <button class="btn" id="s60" data-s="60">Час за минуту</button>
+      <button class="btn" id="s600" data-s="600">Сутки за 2,4 мин</button>
+    </div>
+  </header>
+
+  <div class="main">
+    <div class="mapbox" id="mapbox">
+      <canvas id="map" aria-label="Карта фабрики сверху: цеха без крыш, печи с температурами, баржи, погрузчики, фуры и рабочие по сменам"></canvas>
+      <div class="mapnote">Тяни — двигать · колесо или два пальца — приближать · нажми на цех</div>
+      <div class="zoom"><button class="btn" id="zIn" aria-label="Приблизить">+</button><button class="btn" id="zOut" aria-label="Отдалить">−</button><button class="btn" id="zAll" aria-label="Вся площадка">⌂</button></div>
+      <canvas id="radar" aria-hidden="true"></canvas>
+      <div id="card" hidden><button class="x" id="cardX" aria-label="Закрыть">×</button><div class="z" id="cZ"></div><h3 id="cT"></h3><div class="a" id="cA"></div><p id="cP"></p><div class="live" id="cL"></div></div>
+    </div>
+    <aside>
+      <section class="panel"><h2>Сегодня <span id="todayNote">с 00:00</span></h2>
+        <div class="tiles">
+          <div class="tile hi"><b id="tAC">0</b><span>т активированного угля</span></div>
+          <div class="tile"><b id="tBags">0</b><span>биг-бэгов по 500 кг</span></div>
+          <div class="tile"><b id="tShell">0</b><span>т скорлупы с барж</span></div>
+          <div class="tile"><b id="tCubes">0</b><span>т кальянных кубиков</span></div>
+          <div class="tile"><b id="tCont">0</b><span>контейнеров в порт</span></div>
+          <div class="tile hi"><b id="tRev">$0</b><span>выручка за сутки</span></div>
+        </div>
+      </section>
+      <section class="panel"><h2>Смена <span id="shName">—</span></h2>
+        <div class="shift">
+          <div class="row"><em>На площадке</em><b id="shPeople">—</b></div>
+          <div class="row"><em>Карбонизация</em><span class="pill hot" id="shCarb">5 из 5 · 400–600 °C</span></div>
+          <div class="row"><em>Активация паром</em><span class="pill hot" id="shAct">6 из 6 · 850–1 000 °C</span></div>
+          <div class="row"><em>Причал</em><span class="pill" id="shWharf">—</span></div>
+          <div class="row"><em>Склад АУ</em><b id="shStock">—</b></div>
+        </div>
+      </section>
+      <section class="panel"><h2>Журнал смены <span>что случилось</span></h2><ul id="log"></ul></section>
+    </aside>
+  </div>
+
+  <div class="charts">
+    <section class="panel"><h2>Активированный уголь <span>т в сутки</span></h2><canvas class="chart" id="chAC" aria-label="Столбики: сколько тонн активированного угля упаковано за каждые сутки"></canvas></section>
+    <section class="panel"><h2>Скорлупа с барж <span>т в сутки</span></h2><canvas class="chart" id="chSh" aria-label="Столбики: сколько тонн скорлупы принято за каждые сутки"></canvas></section>
+    <section class="panel"><h2>Кальянные кубики <span>т в сутки</span></h2><canvas class="chart" id="chCu" aria-label="Столбики: сколько тонн кубиков выпущено за каждые сутки"></canvas></section>
+  </div>
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+"use strict";
+const D = {"scene": [{"k": "canopy", "id": "shed_b1", "x": 8, "y": 8, "w": 30, "d": 36, "h": 8, "c": "#E9B872", "piles": [[15, 14, 5, 3.6], [27, 14, 5, 3.2], [14, 26, 5, 3.8], [15, 37, 4.5, 3.0], [30, 24, 4, 2.6], [29, 36, 4, 2.4]]}, {"k": "tanks", "id": "tanks", "x": 42, "y": 8, "w": 21, "d": 18, "c": "#6FB6E8"}, {"k": "box", "id": "purif", "x": 47, "y": 30, "w": 16, "d": 14, "h": 7, "c": "#A9D3F0"}, {"k": "cyl", "id": "purif", "cx": 44.3, "cy": 40, "r": 1.3, "h": 14, "c": "#B9C4CE"}, {"k": "cyl", "id": "purif", "cx": 44.3, "cy": 34, "r": 1.3, "h": 11, "c": "#B9C4CE"}, {"k": "stack", "id": "hall_b1", "cx": 61.7, "cy": 48.1, "r": 1.1, "h": 27}, {"k": "hall", "id": "hall_b1", "x": 8, "y": 52, "w": 50, "d": 66, "h": 11, "rh": 4, "ridge": "y", "c": "#4F8FD6", "ds": [8, 34], "dw": [14, 44]}, {"k": "hall", "id": "fg_b1", "x": 8, "y": 121, "w": 50, "d": 10, "h": 7.5, "rh": 2, "ridge": "x", "c": "#63B97A", "ds": [10, 32]}, {"k": "canopy", "id": "shed_au", "x": 72, "y": 8, "w": 60, "d": 40, "h": 9, "c": "#E9B872", "piles": [[80, 15, 6, 4.2], [95, 14, 6, 4.4], [110, 15, 6, 4.0], [124, 14, 5, 3.4], [79, 29, 6, 4.4], [79, 41, 5, 3.6], [97, 30, 5, 3.0], [112, 32, 6, 3.8], [124, 34, 5, 3.2], [100, 42, 4, 2.6]]}, {"k": "hall", "id": "carb", "x": 72, "y": 56, "w": 60, "d": 44, "h": 12, "rh": 4, "ridge": "x", "c": "#F0935A", "ds": [10, 27, 44], "dw": [8, 28]}, {"k": "cyl", "id": "carb", "cx": 80, "cy": 54, "r": 0.8, "h": 14, "c": "#C9CED4"}, {"k": "cyl", "id": "carb", "cx": 94.5, "cy": 54, "r": 0.8, "h": 14, "c": "#C9CED4"}, {"k": "cyl", "id": "carb", "cx": 109, "cy": 54, "r": 0.8, "h": 14, "c": "#C9CED4"}, {"k": "cyl", "id": "carb", "cx": 123.5, "cy": 54, "r": 0.8, "h": 14, "c": "#C9CED4"}, {"k": "hall", "id": "act", "x": 140, "y": 56, "w": 52, "d": 44, "h": 17, "rh": 4, "ridge": "x", "c": "#E2643A", "ds": [8, 36], "dw": [10, 28]}, {"k": "hall", "id": "pack_au", "x": 140, "y": 106, "w": 52, "d": 20, "h": 9, "rh": 2.5, "ridge": "x", "c": "#63B97A", "ds": [8, 24, 40], "dw": [7]}, {"k": "box", "id": "boiler", "x": 140, "y": 30, "w": 25, "d": 18, "h": 10, "c": "#B8C2CC"}, {"k": "stack", "id": "boiler", "cx": 136.8, "cy": 39.8, "r": 1.4, "h": 34}, {"k": "cyl", "id": "cooling", "cx": 174.5, "cy": 39, "r": 5, "h": 8, "c": "#AEB9C4"}, {"k": "canopy", "id": "bbq", "x": 140, "y": 8, "w": 34, "d": 18, "h": 7, "c": "#F2C94C", "pc": "#2E2E2E", "piles": [[147, 12, 3.4, 2.2], [158, 12, 3.4, 2.4], [168, 12, 3.0, 2.0], [146, 21, 3, 2.0], [160, 21, 3, 2.0]]}, {"k": "los", "id": "los", "x": 178, "y": 8, "w": 16, "d": 20}, {"k": "hall", "id": "workshop", "x": 106, "y": 106, "w": 28, "d": 18, "h": 7, "rh": 2.2, "ridge": "x", "c": "#9AA5B1", "ds": [4, 16]}, {"k": "box", "id": "substation", "x": 72, "y": 106, "w": 16, "d": 12, "h": 5, "c": "#B8C2CC"}, {"k": "pool", "id": "pond", "x": 91, "y": 106, "w": 12, "d": 12}, {"k": "office", "id": "office", "x": 72, "y": 129, "w": 30, "d": 13, "h": 8, "c": "#F2F5F8"}, {"k": "weigh", "id": "weigh", "x": 176, "y": 132, "w": 18, "d": 10}], "info": {"shed_b1": ["Навес скорлупы Блока 1", "Блок 1", "≈1 100 м²", "У причала: короткий путь с баржи. Запас скорлупы около двух недель."], "hall_b1": ["Цех Блока 1", "Блок 1", "50 × 66 м ≈ 3 300 м²", "Карбонизация, конденсация уксуса, прессы кубиков, сушильные туннели, упаковка и типография. Нужно 300 т кубиков в месяц."], "fg_b1": ["Склад готовых кубиков", "Блок 1", "≈500 м²", "Ближе к воротам: отсюда контейнеры уходят на дорогу промпарка."], "tanks": ["Резервуары уксуса", "Блок 1", "≈380 м²", "Рядом с узлом конденсации, в обваловании."], "purif": ["Очистка уксуса", "Блок 1", "≈290 м²", "Рядом с резервуарами; запуск с М25."], "shed_au": ["Навес скорлупы АУ", "Активированный уголь", "≈2 400 м²", "У причала. Вместе с навесом Блока 1 держит запас ≈3 400 т."], "carb": ["Цех карбонизации и дробления", "Активированный уголь", "60 × 44 м ≈ 2 640 м²", "Карбонизационные линии с камерами дожига, дробилки, грохоты 6 и 12 mesh. Мелочь уходит в кубики и на брикеты."], "act": ["Цех активации", "Активированный уголь", "52 × 44 м ≈ 2 290 м²", "Шесть печей активации паром при 850–1 000°C, охлаждение, рассев 6×12. Высокий пролёт."], "pack_au": ["Упаковка и склад АУ", "Активированный уголь", "≈1 040 м²", "Фасовка в биг-бэги по 500 кг, склад на ≈2 недели отгрузок, лаборатория ОТК."], "boiler": ["Котельная и водоподготовка", "Активированный уголь", "≈450 м²", "У цеха активации: короткий паропровод. Тепло — от дожига пиролизного газа."], "cooling": ["Градирня", "Активированный уголь", "—", "Охлаждение оборотной воды."], "bbq": ["Брикеты барбекю", "Активированный уголь", "≈610 м²", "Навес рядом с дроблением: сюда идёт угольная мелочь."], "los": ["Локальные очистные", "Активированный уголь", "≈320 м²", "В нижней точке участка, у выпуска в сеть промпарка."], "workshop": ["Ремонтная мастерская и запчасти", "Общая зона", "≈500 м²", "Между цехами."], "substation": ["Подстанция", "Общая зона", "—", "У въезда сетей промпарка."], "pond": ["Пожарный водоём (PCCC)", "Общая зона", "—", "Запас воды для пожаротушения."], "office": ["Офис, лаборатория, столовая, раздевалки", "Общая зона", "≈720 м², 2 этажа", "У ворот, дальше от огневых цехов."], "villa": ["Гостевой дом", "Общая зона", "≈220 м², 2 этажа", "Для покупателей, партнёров и приезжих специалистов: со смотровой башенки и балкона видны все цеха. Проживание в промпарке нужно согласовать с управляющей компанией."], "weigh": ["Весовая", "Общая зона", "—", "Каждая партия скорлупы и каждая отгрузка взвешиваются."], "wharf": ["Причал", "Река", "—", "Баржи со скорлупой: 1–2 в день на полной мощности. Транспортёры подают сырьё к навесам."], "gate": ["Ворота", "Дорога промпарка", "—", "Готовая продукция уходит контейнерами, здесь же вход персонала."]}, "col": {"raw": "#E9B872", "b1": "#4F8FD6", "ac": "#F0935A", "act": "#E2643A", "fg": "#63B97A", "util": "#9AA5B1", "office": "#F2F5F8", "liq": "#6FB6E8", "bbq": "#F2C94C"}, "acDay": 27.397260273972602, "cubeDay": 9.863013698630137, "shellB1": 40.18264840182649, "shellAU": 202.94266869609336, "priceAC": 3100, "priceCube": 1700, "priceShell": 100};
+const $ = id => document.getElementById(id);
+const fmt = (x, d = 0) => x.toLocaleString("ru-RU", { minimumFractionDigits: d, maximumFractionDigits: d });
+const rnd = a => { const x = Math.sin(a * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const plural = (n, one, few, many) => { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many; };
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+
+// ---------- время: вьетнамское (UTC+7), кнопки ускоряют только симуляцию
+const TZ = 7 * 3600e3, DAY = 864e5;
+let speed = 1, simBase = Date.now(), realBase = performance.now(), anim = 0, lastReal = performance.now();
+const simNow = () => simBase + (performance.now() - realBase) * speed;
+function setSpeed(s) { simBase = simNow(); realBase = performance.now(); speed = s;
+  document.querySelectorAll("[data-s]").forEach(b => b.classList.toggle("on", +b.dataset.s === s));
+  $("cSpeed").textContent = s === 1 ? "ЖИВОЕ" : "×" + s; }
+document.querySelectorAll("[data-s]").forEach(b => b.addEventListener("click", () => setSpeed(+b.dataset.s)));
+{ const m = location.hash.match(/^#t(\d{1,2})(\d\d)?$/);        // …html#t2130 — открыть на 21:30 (для проверки ночи)
+  if (m) simBase = Math.floor((simBase + TZ) / DAY) * DAY - TZ + (+m[1] + (+(m[2] || 0)) / 60) * 36e5; }
+const dayIdx = ms => Math.floor((ms + TZ) / DAY);
+const todH = ms => ((ms + TZ) % DAY) / 36e5;                 // часы с полуночи по Вьетнаму
+const hhmm = h => String(Math.floor(h) % 24).padStart(2, "0") + ":" + String(Math.floor((h % 1) * 60)).padStart(2, "0");
+const dayF = (d, k) => 0.93 + 0.14 * rnd(d * 7.31 + k);       // сутки не одинаковые: ±7% к норме
+
+// ---------- расписание суток
+// баржи: две к причалу АУ (кран у x=110), одна к причалу Блока 1 (кран у x=31)
+const BARGES = [
+  { id: "a1", name: "Меконг-7", t0: 5.4, x: 102, share: 0.5, to: "au" },
+  { id: "b1", name: "Бенче-2", t0: 9.2, x: 24, share: 1, to: "b1" },
+  { id: "a2", name: "Тьавинь-4", t0: 13.4, x: 102, share: 0.5, to: "au" },
+];
+const B_IN = 0.7, B_UNLOAD = 3, B_OUT = 0.7;
+// фуры за контейнерами: АУ — у склада упаковки, кубики — у склада Блока 1
+const TRUCKS = [
+  { id: "t1", t0: 8.5, kind: "au", plate: "84C-217.45", c: "#2F6FC4" },
+  { id: "t2", t0: 12.5, kind: "b1", plate: "84C-305.18", c: "#C0392B" },
+  { id: "t3", t0: 16.5, kind: "au", plate: "84C-119.62", c: "#1E8449" },
+];
+const T_IN = 0.35, T_LOAD = 1.6, T_OUT = 0.35;
+const SHIFTS = [["А", 6, 14], ["Б", 14, 22], ["В", 22, 30]];
+const shiftAt = h => h >= 6 && h < 14 ? 0 : h >= 14 && h < 22 ? 1 : 2;
+const maintKiln = d => d % 6;                                  // какая печь активации сегодня на осмотре, 10:00–12:00
+
+function bargeState(b, h, d) {
+  const t = h - b.t0, tons = (b.to === "au" ? D.shellAU : D.shellB1) * b.share * dayF(d, b.id === "a1" ? 3 : b.id === "a2" ? 4 : 5);
+  if (t < 0 || t > B_IN + B_UNLOAD + B_OUT) return { on: false, tons, got: t < 0 ? 0 : tons };
+  if (t < B_IN) return { on: true, x: 260 - (260 - b.x) * (t / B_IN), y: -27, ph: "in", tons, got: 0, k: 1 };
+  if (t < B_IN + B_UNLOAD) { const k = (t - B_IN) / B_UNLOAD; return { on: true, x: b.x, y: -22, ph: "unload", tons, got: tons * k, k: 1 - k }; }
+  const k = (t - B_IN - B_UNLOAD) / B_OUT; return { on: true, x: b.x - (b.x + 90) * k, y: -27, ph: "out", tons, got: tons, k: 0 };
+}
+// путь фуры: с запада по дороге → ворота → к складу → обратно → на восток
+const TP = {
+  au: [[-80, 157.5], [160, 157.5], [160, 146], [160, 133]],
+  b1: [[-80, 157.5], [160, 157.5], [160, 146], [40, 146], [40, 138]],
+};
+function polyAt(P, k) {
+  const L = []; let tot = 0; for (let i = 1; i < P.length; i++) { const l = Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]); L.push(l); tot += l; }
+  let s = clamp(k, 0, 1) * tot;
+  for (let i = 0; i < L.length; i++) { if (s <= L[i] || i === L.length - 1) { const q = L[i] ? s / L[i] : 0;
+    return { x: P[i][0] + (P[i + 1][0] - P[i][0]) * q, y: P[i][1] + (P[i + 1][1] - P[i][1]) * q, a: Math.atan2(P[i + 1][1] - P[i][1], P[i + 1][0] - P[i][0]) }; } s -= L[i]; }
+}
+function truckState(tr, h) {
+  const t = h - tr.t0, P = TP[tr.kind];
+  if (t < 0 || t > T_IN + T_LOAD + T_OUT) return { on: false, gone: t > T_IN + T_LOAD + T_OUT };
+  if (t < T_IN) return Object.assign({ on: true, ph: "in" }, polyAt(P, t / T_IN));
+  if (t < T_IN + T_LOAD) return Object.assign({ on: true, ph: "load", k: (t - T_IN) / T_LOAD }, polyAt(P, 1));
+  const back = P.slice().reverse().concat([[260, 157.5]]); back[back.length - 2] = [160, 157.5];
+  const o = polyAt(back, (t - T_IN - T_LOAD) / T_OUT); o.a += 0; return Object.assign({ on: true, ph: "out", full: 1 }, o);
+}
+
+// ---------- люди: посты и имена по сменам (имена вымышленные)
+const NAMES = ["Минь", "Хунг", "Лан", "Туан", "Хоа", "Тханг", "Ву", "Нгок", "Зунг", "Фыонг", "Куанг", "Тхао", "Бинь", "Хай", "Лок", "Чанг",
+  "Ань", "Зянг", "Хиеу", "Май", "Шон", "Ким", "Дат", "Линь", "Нам", "Тху", "Кхоа", "Ха", "Фат", "Ви", "Чунг", "Йен", "Тинь", "Нга", "Хау", "Тьи",
+  "Бао", "Хань", "Лонг", "Ми", "Тай", "Уйен", "Дык", "Тхюи", "Кхань", "Хонг", "Виет", "Луан"];
+const POSTS = [
+  [12.6, 61.2, "оператор карбонизации Б1"], [27, 61, "оператор печи Б1"], [15, 86, "мельница"], [34.5, 86, "пресс кубиков"],
+  [44.5, 86, "пресс кубиков"], [53, 96, "сушка кубиков"], [14, 110, "упаковка"], [23, 110, "упаковка"], [32, 110, "упаковка"], [41, 110, "упаковка"],
+  [114.5, 64.4, "оператор линии 1"], [114.5, 73.4, "оператор линии 2"], [114.5, 82.4, "оператор линии 3"], [114.5, 91.4, "оператор линии 4"],
+  [76, 74, "приём в бункер"], [125.5, 95, "дробление и рассев"], [184.5, 66, "печи активации 1–2"], [184.5, 80, "печи активации 3–4"], [184.5, 94, "печи активации 5–6"],
+  [146, 38, "котельная"], [158, 45, "водоподготовка"], [150.5, 110, "фасовка"], [150.5, 113, "фасовка"], [170, 108, "кладовщик АУ"],
+  [31, -4, "крановщик Б1"], [110, -4, "крановщик АУ"], [95, 140, "лаборатория ОТК"], [98.5, 140, "лаборатория ОТК"], [185, 135, "весовая"],
+  [160, 151.5, "охрана ворот"], [111, 110.5, "мастерская"], [121.5, 111.5, "электрик"], [79, 113, "подстанция"], [53, 36.5, "очистка уксуса"],
+];
+const WALKS = [[[80, 66.5], [110, 66.5]], [[110, 84.5], [80, 84.5]], [[148, 64.5], [178, 64.5]], [[178, 78.5], [148, 78.5]], [[148, 92.5], [178, 92.5]],
+  [[14, 103.5], [48, 103.5]], [[156, 114], [184, 114]], [[74, 135.2], [87, 135.2]], [[110, 115], [130, 115]]];
+const OFFICE = [[75.2, 132.6], [78.7, 132.6], [82.2, 132.6], [85.7, 132.6], [75.2, 138.2], [78.7, 138.2], [82.2, 138.2]];
+const SHIFT_HAT = ["#F2C14E", "#F0935A", "#7FC8D8"];
+
+// ---------- геометрия карты (метры: x — восток, y — север; участок 200 × 150 м, река на юге)
+const WB = { x0: -70, x1: 270, y0: -95, y1: 185 };
+const SPX = 7;                                                  // пикселей на метр в заготовке статичного слоя
+const st = document.createElement("canvas");
+st.width = (WB.x1 - WB.x0) * SPX; st.height = (WB.y1 - WB.y0) * SPX;
+const BL = "#2F8FD6", SV = "#C3C9D0", RD = "#D93A2B";
+
+function drawStatic() {
+  const g = st.getContext("2d");
+  g.setTransform(SPX, 0, 0, -SPX, -WB.x0 * SPX, WB.y1 * SPX);  // мировые метры, ось y вверх
+  const R = (x, y, w, d, c) => { g.fillStyle = c; g.fillRect(x, y, w, d); };
+  const S = (x, y, w, d, c, lw) => { g.strokeStyle = c; g.lineWidth = lw || 0.3; g.strokeRect(x, y, w, d); };
+  const C = (x, y, r, c) => { g.fillStyle = c; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); };
+  const L = (pts, c, w, dash) => { g.strokeStyle = c; g.lineWidth = w; g.setLineDash(dash || []); g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke(); g.setLineDash([]); };
+  // земля, поля и джунгли вокруг
+  R(WB.x0, WB.y0, WB.x1 - WB.x0, WB.y1 - WB.y0, "#16221A");
+  for (let i = 0; i < 9; i++) for (let j = 0; j < 2; j++) R(-70 + i * 38, 164 + j * 11, 36, 9.5, ["#2A3A22", "#24331E", "#30422A"][(i + j) % 3]);
+  for (let i = 0; i < 900; i++) { const x = WB.x0 + rnd(i) * (WB.x1 - WB.x0), y = -14 + rnd(i + 0.5) * 178;
+    if (x > -2 && x < 202 && y > -16 && y < 152) continue; if (y > 151 && y < 164) continue;
+    C(x, y, 1.2 + rnd(i + 0.2) * 1.8, ["#1F3A24", "#244428", "#1A3020", "#2B4D2E"][i % 4]); }
+  // река и противоположный берег
+  R(WB.x0, WB.y0, WB.x1 - WB.x0, 81, "#0E3540");
+  for (let i = 0; i < 160; i++) { const x = WB.x0 + rnd(i * 3.1) * 340, y = -92 + rnd(i * 5.7) * 76; L([[x, y], [x + 3 + rnd(i) * 5, y]], "rgba(127,200,216,.18)", 0.25); }
+  R(WB.x0, -95, 340, 9, "#1A2A1C");
+  // дорога промпарка на севере
+  R(WB.x0, 152, 340, 11, "#24272B"); L([[WB.x0, 157.5], [WB.x1, 157.5]], "#C9B458", 0.25, [3, 3]);
+  // участок: бетон, проезды, забор
+  R(0, -12, 200, 162, "#2B2E32"); R(6, -12, 122, 12, "#3A3E44");
+  [[58, 0, 14, 150], [132, 0, 8, 150], [0, 48, 200, 8], [0, 100, 200, 6], [20, 142, 180, 8]].forEach(([x, y, w, d]) => R(x, y, w, d, "#222428"));
+  [[[65, 0], [65, 150]], [[136, 0], [136, 150]], [[0, 52], [200, 52]], [[0, 103], [200, 103]], [[22, 146], [200, 146]]].forEach(p => L(p, "#8B8040", 0.18, [2, 2.5]));
+  S(0, -12, 200, 162, "#56606A", 0.4);
+  R(154, 149.3, 12, 1.4, "#2B2E32");
+  // причал: швартовные тумбы
+  for (let x = 10; x < 128; x += 8) C(x, -11.2, 0.45, "#888");
+  // здания и навесы по генплану
+  const zone = id => ({ hall_b1: D.col.b1, fg_b1: D.col.fg, shed_b1: D.col.raw, shed_au: D.col.raw, carb: D.col.ac, act: D.col.act, pack_au: D.col.fg,
+    boiler: D.col.util, bbq: D.col.bbq, workshop: D.col.util, office: D.col.office, tanks: D.col.liq, purif: D.col.liq, substation: D.col.util, los: D.col.liq, weigh: D.col.util })[id] || "#8A939C";
+  D.scene.forEach(o => {
+    const z = zone(o.id);
+    if (o.k === "hall" || o.k === "box" || o.k === "office") { R(o.x, o.y, o.w, o.d, o.k === "office" ? "#3A3832" : "#1E2227"); S(o.x, o.y, o.w, o.d, z, 0.7); }
+    else if (o.k === "canopy") { R(o.x, o.y, o.w, o.d, "#2A2622"); g.strokeStyle = z; g.lineWidth = 0.35; g.setLineDash([1.6, 1]); g.strokeRect(o.x, o.y, o.w, o.d); g.setLineDash([]);
+      for (let x = o.x + 6; x < o.x + o.w; x += 6) for (let y = o.y + 6; y < o.y + o.d; y += 6) C(x, y, 0.3, "#6B6258"); }
+    else if (o.k === "tanks") { R(o.x, o.y, o.w, o.d, "#24282D"); S(o.x, o.y, o.w, o.d, z, 0.5); for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) { C(o.x + 3.8 + i * 6.7, o.y + 4.8 + j * 8.4, 2.9, "#5D9FC9"); C(o.x + 3.8 + i * 6.7, o.y + 4.8 + j * 8.4, 2.1, "#7FB8DD"); } }
+    else if (o.k === "cyl") C(o.cx, o.cy, o.r, o.c || "#AAB");
+    else if (o.k === "stack") C(o.cx, o.cy, o.r, "#7D868F");
+    else if (o.k === "los") { R(o.x, o.y, o.w, o.d, "#24282D"); S(o.x, o.y, o.w, o.d, z, 0.5); R(o.x + 1.5, o.y + 1.5, o.w - 3, 7.5, "#2D6670"); R(o.x + 1.5, o.y + 11, o.w - 3, 7.5, "#3B7B6E"); }
+    else if (o.k === "pool") { R(o.x, o.y, o.w, o.d, "#1F5A6A"); S(o.x, o.y, o.w, o.d, "#7FC8D8", 0.3); }
+    else if (o.k === "weigh") { R(o.x, o.y, o.w, o.d, "#2E3238"); R(o.x + 2, o.y + 2.5, o.w - 4, o.d - 5, "#555D66"); S(o.x, o.y, o.w, o.d, z, 0.5); }
+  });
+  // гостевой дом с бассейном
+  R(105, 127, 20, 14, "#1E3322"); R(108, 132.5, 14, 8, "#E9E4D8"); S(108, 132.5, 14, 8, "#C9653B", 0.6); R(113.5, 135, 3, 3, "#C9653B");
+  R(110, 128.4, 10, 2.8, "#3FA7C2"); for (let i = 0; i < 6; i++) C(109.2 + i * 2.3, 131.9, 0.35, "#F4F1E8");
+  // оборудование. Установка карбонизации — одна и та же в Блоке 1 и в цехе АУ
+  const carb = (x0, y) => {
+    R(x0, y - 1.8, 3.6, 3.6, BL); L([[x0 + 3.6, y], [x0 + 8.7, y]], "#111", 0.9);
+    R(x0 + 8.7, y - 1.6, 16.3, 3.2, SV); C(x0 + 12, y - 2.9, 0.9, SV); C(x0 + 20, y - 2.9, 0.9, SV);
+    for (let i = 0; i < 3; i++) { R(x0 + 26 + i * 2.7, y - 1.4, 2.1, 2.8, "#9AA5B1"); C(x0 + 27 + i * 2.7, y - 1.6, 0.55, RD); }
+    L([[x0 + 34, y], [x0 + 35.4, y]], "#111", 0.9); R(x0 + 35.4, y - 1.35, 8.6, 2.7, BL);
+  };
+  carb(10.6, 59.2); [62, 71, 80, 89].forEach(y => { carb(73.6, y); L([[118, y], [126, y]], "#111", 0.9); });
+  // Блок 1: газоочистка, мельница, прессы, сушка, столы упаковки
+  R(11, 68.5, 4.2, 4.4, BL); C(18.5, 70.7, 1.2, BL); R(26, 69, 5.5, 3.2, "#9AA5B1"); C(49, 66.5, 0.9, "#6FB6E8"); C(52.5, 66.5, 0.9, "#6FB6E8"); C(51.8, 72.6, 1.6, "#A9D3F0");
+  R(11, 81, 8, 5, "#5B6875"); C(25, 83.5, 2, "#9AA5B1"); R(32, 81, 5, 4, "#2F5F9E"); R(42, 81, 5, 4, "#2F5F9E");
+  [91, 99].forEach(y => { R(12, y, 38, 3.2, "#8E99A4"); R(50, y - 0.3, 3.5, 3.8, "#E2643A"); });
+  R(10, 95.4, 42, 1.4, "#15171A");
+  for (let i = 0; i < 4; i++) { R(12 + i * 9, 107, 6, 2, "#B8925E"); }
+  for (let i = 0; i < 14; i++) for (let r = 0; r < 2; r++) if (i !== 6 && i !== 7) R(10.5 + i * 3.3, 122.6 + r * 5.2, 2.4, 1.9, ["#C9A76B", "#B8905A", "#D4B47E"][(i + r) % 3]);
+  // дробление и галерея к активации
+  R(120, 93, 5, 4, "#5B6875"); R(127, 92, 4, 5, "#5B6875"); R(125.9, 60, 1.5, 33, "#15171A");
+  // бункер скорлупы у цеха карбонизации, ленты линии АУ
+  R(72.8, 48.8, 4.8, 4.2, "#7A6A55"); R(73.3, 49.3, 3.8, 3.2, "#6A4A2E");
+  // активация: 6 вращающихся печей, горелки, охладители
+  [61, 68, 75, 82, 89, 96].forEach(y => { R(143.9, y - 0.9, 2.2, 1.8, "#7A8794"); R(146, y - 2.1, 34, 4.2, "#8D99A6"); R(180.5, y - 2.4, 4, 4.8, "#B8C2CC"); R(185.5, y - 1.1, 5, 2.2, SV); });
+  R(190.2, 59.5, 1.4, 38.5, "#15171A");
+  // котельная: два котла; упаковка АУ: фасовочная машина
+  [34.5, 42].forEach(y => { R(145, y - 2.1, 12, 4.2, "#B03A2E"); R(143.4, y - 0.9, 1.6, 1.8, "#FF7A2F"); });
+  C(160.5, 34.5, 1.7, "#6FB6E8"); C(160.5, 42.5, 1.3, "#A9D3F0");
+  R(143, 108, 6, 5, "#9AA5B1"); R(144, 109, 4, 3, "#2B333B");
+  // подстанция, мастерская, офис
+  R(74, 108, 4, 3, "#7A8794"); R(80, 108, 4, 3, "#7A8794"); R(108, 108, 9, 1.4, "#8A6E4B"); R(120, 108, 3, 2.4, "#4F5D73"); R(108, 120.5, 16, 1.5, "#9AA5B1");
+  OFFICE.forEach(([x, y]) => R(x - 1.2, y - 1.8, 2.4, 1.1, "#C9A76B")); R(93.4, 140.4, 8, 1.1, "#E8EDF2"); R(89.6, 131, 2.2, 4, "#8A6E4B");
+  // фонари вдоль проездов (ночью светятся)
+}
+drawStatic();
+
+// ленты: точки x, y — по ним бегут штрихи
+const BELTS = [
+  [[75.2, 52.6], [75.2, 91]], [[126.65, 60.5], [126.65, 92.5]], [[129.6, 98.6], [143.5, 98.6], [143.5, 60]],
+  [[190.9, 60], [190.9, 108.6], [147, 108.6]], [[11, 96.1], [51, 96.1]], [[120.5, 98.1], [129.5, 98.1]],
+  [[31, -3], [31, 8]], [[110, -3], [110, 8]],
+];
+const LAMPS = []; for (let x = 4; x < 200; x += 14) { LAMPS.push([x, 51.5]); LAMPS.push([x, 102.5]); } for (let y = 4; y < 150; y += 14) { LAMPS.push([65, y]); LAMPS.push([136, y]); }
+for (let x = 24; x < 200; x += 14) LAMPS.push([x, 147.5]); for (let x = 10; x < 128; x += 16) LAMPS.push([x, -1]);
+
+// ---------- вид: перетаскивание, колесо, щипок
+const cv = $("map"), ctx = cv.getContext("2d"), box = $("mapbox");
+let W = 0, H = 0, dpr = 1, k = 4, cx = 100, cy = 70;
+function fitAll() { k = Math.min(W / 212, H / 200); cx = 100; cy = 62; }
+function resize() { dpr = Math.min(2, devicePixelRatio || 1); W = box.clientWidth; H = box.clientHeight; cv.width = W * dpr; cv.height = H * dpr; }
+const sx = x => (x - cx) * k + W / 2, sy = y => (cy - y) * k + H / 2;
+const wx = px => (px - W / 2) / k + cx, wy = py => cy - (py - H / 2) / k;
+function zoomAt(f, px, py) { const x = wx(px), y = wy(py); k = clamp(k * f, Math.min(W / 330, H / 280), 30); cx = x - (px - W / 2) / k; cy = y + (py - H / 2) / k; }
+const ptr = new Map(); let moved = 0, pinch0 = 0;
+cv.addEventListener("pointerdown", e => { cv.setPointerCapture(e.pointerId); ptr.set(e.pointerId, [e.offsetX, e.offsetY]); moved = 0; cv.classList.add("drag");
+  if (ptr.size === 2) { const [a, b] = [...ptr.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
+cv.addEventListener("pointermove", e => { if (!ptr.has(e.pointerId)) return; const p = ptr.get(e.pointerId), dx = e.offsetX - p[0], dy = e.offsetY - p[1];
+  if (ptr.size === 1) { cx -= dx / k; cy += dy / k; moved += Math.abs(dx) + Math.abs(dy); }
+  ptr.set(e.pointerId, [e.offsetX, e.offsetY]);
+  if (ptr.size === 2) { const [a, b] = [...ptr.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch0) zoomAt(d / pinch0, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2); pinch0 = d; moved = 99; } });
+const up = e => { if (ptr.size === 1 && moved < 6) pick(e.offsetX, e.offsetY); ptr.delete(e.pointerId); if (ptr.size < 2) pinch0 = 0; if (!ptr.size) cv.classList.remove("drag"); };
+cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", e => { ptr.delete(e.pointerId); cv.classList.remove("drag"); });
+cv.addEventListener("wheel", e => { e.preventDefault(); zoomAt(Math.exp(-e.deltaY * 0.0015), e.offsetX, e.offsetY); }, { passive: false });
+$("zIn").onclick = () => zoomAt(1.4, W / 2, H / 2); $("zOut").onclick = () => zoomAt(1 / 1.4, W / 2, H / 2); $("zAll").onclick = fitAll;
+
+// ---------- карточка здания по нажатию
+let cardId = null;
+const NAMES_EXTRA = { villa: [108, 132.5, 14, 8], wharf: [6, -12, 122, 12] };
+function pick(px, py) {
+  const x = wx(px), y = wy(py);
+  let hit = Object.entries(NAMES_EXTRA).find(([, r]) => x >= r[0] && x <= r[0] + r[2] && y >= r[1] && y <= r[1] + r[3]);
+  let id = hit && hit[0];
+  if (!id) { const o = D.scene.find(o => o.w && x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.d); id = o && o.id; }
+  if (!id || !D.info[id]) { $("card").hidden = true; cardId = null; return; }
+  const [t, z, a, p] = D.info[id]; cardId = id;
+  $("cT").textContent = t; $("cZ").textContent = z; $("cA").textContent = a; $("cP").textContent = p; $("card").hidden = false;
+}
+$("cardX").onclick = () => { $("card").hidden = true; cardId = null; };
+
+// ---------- состояние фабрики на момент времени
+function state(ms) {
+  const h = todH(ms), d = dayIdx(ms), sh = shiftAt(h);
+  const kAC = D.acDay * dayF(d, 1), kCu = D.cubeDay * dayF(d, 2);
+  const ac = kAC * h / 24, cubes = kCu * h / 24;
+  const barges = BARGES.map(b => Object.assign({ b }, bargeState(b, h, d)));
+  const shell = barges.reduce((s, q) => s + q.got, 0);
+  const trucks = TRUCKS.map(t => Object.assign({ t }, truckState(t, h)));
+  const cont = trucks.filter(q => q.gone && q.t.kind === "au").length;
+  const contB1 = trucks.filter(q => q.gone && q.t.kind === "b1").length;
+  const mk = maintKiln(d), maint = h >= 10 && h < 12;
+  const stockBags = Math.floor((ac + kAC * 0.35) / 0.5) - cont * 40;   // на складе: утро начинается с запаса ≈⅓ суток
+  return { h, d, sh, ac, cubes, shell, barges, trucks, cont, contB1, mk, maint, stockBags, rev: ac * D.priceAC + cubes * D.priceCube };
+}
+
+// ---------- журнал: события суток до текущей минуты
+function events(S) {
+  const E = [], d = S.d;
+  const n0 = POSTS.length + WALKS.length; SHIFTS.forEach(([n, a], i) => E.push([a % 24, `Смена ${n} заступила: ${n0} ${plural(n0, "человек", "человека", "человек")} на постах и в обходах`, i]));
+  BARGES.forEach(b => { const q = bargeState(b, 0, d), dock = b.to === "au" ? "причалу АУ" : "причалу Блока 1";
+    E.push([b.t0, `Баржа «${b.name}» идёт к ${dock}`]); E.push([b.t0 + B_IN, `«${b.name}» у причала, кран начал разгрузку`]);
+    E.push([b.t0 + B_IN + B_UNLOAD, `Принято ${fmt(q.tons)} т скорлупы с «${b.name}», навес пополнен`]); });
+  TRUCKS.forEach(t => { E.push([t.t0 + T_IN, `Фура ${t.plate} заехала за ${t.kind === "au" ? "контейнером АУ" : "кубиками"}`]);
+    E.push([t.t0 + T_IN + T_LOAD, t.kind === "au" ? `Контейнер 20 т АУ (40 биг-бэгов) ушёл в порт, фура ${t.plate}` : `Контейнер кубиков ушёл в порт, фура ${t.plate}`]); });
+  E.push([10, `Печь активации №${S.mk + 1} остановлена на плановый осмотр`]); E.push([12, `Печь активации №${S.mk + 1} снова в работе`]);
+  [0.5, 8.5, 16.5].forEach((h, i) => E.push([h, `ОТК: партия АУ 6×12, йодное число ${fmt(1010 + Math.floor(rnd(d * 3 + i) * 70))} мг/г — норма`]));
+  [3, 11, 19].forEach((h, i) => E.push([h, `Карбонизация: ${fmt(520 + Math.floor(rnd(d + i) * 40))} °C, газ пиролиза идёт на сушку и котельную`]));
+  return E.filter(e => e[0] <= S.h).sort((a, b) => b[0] - a[0]);
+}
+let lastLogKey = "";
+function renderLog(S) {
+  const E = events(S), key = S.d + ":" + E.length; if (key === lastLogKey) return;
+  const fresh = lastLogKey && lastLogKey.split(":")[0] === String(S.d); lastLogKey = key;
+  $("log").innerHTML = E.slice(0, 40).map((e, i) => `<li class="${fresh && i === 0 ? "new" : ""}"><time>${hhmm(e[0])}</time><span>${e[1]}</span></li>`).join("");
+}
+
+// ---------- кадр карты
+const temp = (base, amp, seed) => Math.round(base + amp * Math.sin(anim * 0.31 + seed * 1.7) + amp * 0.5 * Math.sin(anim * 0.13 + seed));
+function tag(x, y, text, color, bg) {
+  ctx.font = "600 12px " + getComputedStyle(document.body).getPropertyValue("--mono");
+  const w = ctx.measureText(text).width + 10, px = sx(x), py = sy(y);
+  ctx.fillStyle = bg || "rgba(11,13,15,.86)"; ctx.fillRect(px - w / 2, py - 9, w, 18);
+  ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.strokeRect(px - w / 2 + 0.5, py - 8.5, w - 1, 17);
+  ctx.fillStyle = color; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(text, px, py + 0.5);
+}
+function label(x, y, text, size, color) {
+  ctx.font = `600 ${size}px Oswald, "Arial Narrow", sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.lineWidth = 3.2; ctx.strokeStyle = "rgba(0,0,0,.85)"; ctx.strokeText(text, sx(x), sy(y)); ctx.fillStyle = color || "#EEEAE0"; ctx.fillText(text, sx(x), sy(y));
+}
+const wrect = (x, y, w, d, c) => { ctx.fillStyle = c; ctx.fillRect(sx(x), sy(y + d), w * k, d * k); };
+// человек сверху: плечи в спецовке и каска цвета смены; не меньше 3 px, чтобы было видно на общем плане
+function person(x, y, hat) { const r = Math.max(3, 0.75 * k); ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.beginPath(); ctx.arc(sx(x) + 1.5, sy(y) + 1.5, r, 0, 7); ctx.fill();
+  ctx.fillStyle = "#2E6FB0"; ctx.beginPath(); ctx.ellipse(sx(x), sy(y), r, r * 0.72, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = hat; ctx.beginPath(); ctx.arc(sx(x), sy(y), r * 0.55, 0, 7); ctx.fill(); }
+const wcirc = (x, y, r, c) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(sx(x), sy(y), Math.max(1.2, r * k), 0, 7); ctx.fill(); };
+function vehicle(x, y, a, len, wid, body, cab, load) {
+  ctx.save(); ctx.translate(sx(x), sy(y)); ctx.rotate(-a);
+  ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.fillRect(-len / 2 * k + 2, -wid / 2 * k + 2, len * k, wid * k);
+  ctx.fillStyle = body; ctx.fillRect(-len / 2 * k, -wid / 2 * k, len * k, wid * k);
+  if (cab) { ctx.fillStyle = cab; ctx.fillRect(len / 2 * k - len * 0.28 * k, -wid / 2 * k, len * 0.28 * k, wid * k); }
+  if (load) { ctx.fillStyle = load; ctx.fillRect(-len / 2 * k + 0.4 * k, -wid / 2 * k + 0.35 * k, len * 0.62 * k, wid * k - 0.7 * k); }
+  ctx.restore();
+}
+function shuttle(P, period, phase) {    // погрузчик туда-обратно: 0..1 и обратно, гружёный — туда
+  const u = ((anim / period + phase) % 1), there = u < 0.5, q = there ? u * 2 : 2 - u * 2;
+  const p = polyAt(P, clamp(q * 1.15 - 0.075, 0, 1)); return Object.assign(p, { loaded: there, a: there ? p.a : p.a + Math.PI });
+}
+
+function frame() {
+  const now = performance.now(), dt = Math.min(0.1, (now - lastReal) / 1000); lastReal = now;
+  anim += dt * Math.min(speed, 6);
+  const ms = simNow(), S = state(ms), h = S.h, night = h < 5.6 || h > 18.4 ? 1 : h < 6.4 ? (6.4 - h) / 0.8 : h > 17.6 ? (h - 17.6) / 0.8 : 0;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.fillStyle = "#0B0D0F"; ctx.fillRect(0, 0, W, H);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(st, sx(WB.x0), sy(WB.y1), (WB.x1 - WB.x0) * k, (WB.y1 - WB.y0) * k);
+
+  // ленты: бегущие штрихи
+  ctx.lineCap = "butt";
+  BELTS.forEach(P => { ctx.strokeStyle = "#0E0F11"; ctx.lineWidth = Math.max(2, 1.1 * k); ctx.setLineDash([]); ctx.beginPath(); P.forEach(([x, y], i) => i ? ctx.lineTo(sx(x), sy(y)) : ctx.moveTo(sx(x), sy(y))); ctx.stroke();
+    ctx.strokeStyle = "#8A6A44"; ctx.lineWidth = Math.max(1, 0.5 * k); ctx.setLineDash([0.9 * k, 1.3 * k]); ctx.lineDashOffset = -anim * 1.6 * k; ctx.stroke(); });
+  ctx.setLineDash([]);
+
+  // печи карбонизации: горячая часть пульсирует, барабан вращается
+  const carbs = [[10.6, 59.2], [73.6, 62], [73.6, 71], [73.6, 80], [73.6, 89]];
+  carbs.forEach(([x0, y], i) => {
+    const pulse = 0.55 + 0.25 * Math.sin(anim * 2 + i);
+    wrect(x0 + 14, y - 1.6, 7, 3.2, `rgba(232,96,42,${pulse})`);
+    for (let s = 0; s < 6; s++) { const xx = x0 + 8.9 + ((s * 2.7 + anim * 1.2) % 16); wrect(xx, y - 1.6, 0.35, 3.2, "rgba(0,0,0,.25)"); }
+    for (let s = 0; s < 3; s++) { const xx = x0 + 35.6 + ((s * 2.8 + anim * 1.6) % 8.2); wrect(xx, y - 1.35, 0.3, 2.7, "rgba(0,0,0,.3)"); }
+  });
+  // печи активации: горячая зона, вращение, одна на осмотре 10:00–12:00
+  [61, 68, 75, 82, 89, 96].forEach((y, i) => {
+    const off = S.maint && i === S.mk;
+    if (!off) { const g = ctx.createLinearGradient(sx(146), 0, sx(180), 0); g.addColorStop(0, "rgba(255,106,43,0)"); g.addColorStop(0.55, `rgba(255,106,43,${0.35 + 0.15 * Math.sin(anim * 1.7 + i)})`); g.addColorStop(1, "rgba(255,170,60,.85)");
+      ctx.fillStyle = g; ctx.fillRect(sx(146), sy(y + 2.1), 34 * k, 4.2 * k);
+      for (let s = 0; s < 9; s++) { const xx = 146.3 + ((s * 3.8 + anim * 1.4) % 33.5); wrect(xx, y - 2.1, 0.35, 4.2, "rgba(0,0,0,.22)"); }
+      wrect(180.2, y - 1.4, 0.5, 2.8, `rgba(255,140,50,${0.6 + 0.4 * Math.sin(anim * 6 + i)})`);
+    } else { wrect(146, y - 2.1, 34, 4.2, "rgba(40,44,50,.75)"); }
+  });
+  // сушилки кубиков, котлы
+  [91, 99].forEach((y, i) => wrect(50, y - 0.3, 3.5, 3.8, `rgba(255,120,50,${0.5 + 0.3 * Math.sin(anim * 2.4 + i)})`));
+  [34.5, 42].forEach((y, i) => wrect(143.4, y - 0.9, 1.6, 1.8, `rgba(255,160,60,${0.6 + 0.4 * Math.sin(anim * 7 + i)})`));
+  // кучи скорлупы на навесах: растут после барж
+  const pileK = clamp(0.55 + S.shell / (D.shellAU + D.shellB1) * 0.45 - h / 24 * 0.45, 0.35, 1);
+  [[80, 15], [95, 14], [110, 15], [124, 14], [79, 29], [97, 30], [112, 32], [124, 34], [100, 42]].forEach(([x, y], i) => wcirc(x, y, (4 + (i % 3)) * pileK, i % 2 ? "#7A4A26" : "#8B5530"));
+  [[15, 14], [27, 14], [14, 26], [15, 37], [29, 36]].forEach(([x, y], i) => wcirc(x, y, (3.8 + (i % 2)) * pileK, "#8B5530"));
+  // склад АУ: биг-бэги
+  const slots = []; [116.5, 119.5, 122.5].forEach(y => { for (let x = 153; x < 189; x += 1.45) slots.push([x, y]); });
+  const nb = clamp(Math.round(S.stockBags / 2), 0, slots.length);
+  for (let i = 0; i < nb; i++) wrect(slots[i][0] - 0.55, slots[i][1] - 0.55, 1.1, 1.1, "#EDEBE2");
+
+  // баржи и краны
+  S.barges.forEach(q => { if (!q.on) return;
+    vehicle(q.x, q.y, 0, 22, 7, "#3E5873", "#F2F5F8", q.k > 0.02 ? "#8B5530" : null);
+    if (q.ph === "unload") { const cxr = q.b.to === "au" ? 110 : 31, u = (Math.sin(anim * 1.1) + 1) / 2, gy = -22 + u * 30;
+      wrect(cxr - 0.3, -24, 0.6, 33, "rgba(242,193,78,.85)"); wrect(cxr - 1.1, gy - 1.1, 2.2, 2.2, "#2B2B2B"); }
+    if (k > 2.4) tag(q.x, q.y + 6, `«${q.b.name}» ${fmt(q.tons - q.got)} т`, "#7FC8D8");
+  });
+  [31, 110].forEach(x => { wrect(x - 2.5, -11, 5, 1.2, "#E8C22E"); });
+  // погрузчики-ковши: со склада к бункеру печей
+  [[[[25, 30], [25, 49]], 24, 0], [[[104, 36], [104, 50.2], [80.8, 50.2]], 32, 0.3], [[[120, 30], [120, 47], [80.8, 50.2]], 38, 0.7]].forEach(([P, per, ph]) => {
+    const v = shuttle(P, per, ph); vehicle(v.x, v.y, v.a, 3.6, 2, "#E8B92E", "#2B2B2B", v.loaded ? "#8B5530" : null); });
+  // погрузчики на складах
+  [[[[12, 126.2], [54, 126.2]], 20, 0], [[[152, 111.5], [186, 111.5]], 22, 0.4], [[[166, 127.5], [158, 128.8], [150, 128.8]], 16, 0.2]].forEach(([P, per, ph]) => {
+    const v = shuttle(P, per, ph); vehicle(v.x, v.y, v.a, 2.6, 1.4, "#E8B92E", "#2B2B2B", v.loaded ? "#EDEBE2" : null); });
+  // фуры
+  S.trucks.forEach(q => { if (!q.on) return; const c = q.t.c;
+    vehicle(q.x, q.y, q.a, 14, 2.6, c, "#DDE3E8", null);
+    if (k > 2.4) tag(q.x, q.y + 3.6, q.ph === "load" ? `${q.t.plate} · погрузка ${Math.round(q.k * 100)}%` : q.t.plate, "#F0935A"); });
+  // машины на дороге промпарка
+  for (let i = 0; i < 6; i++) { const dir = i % 2 ? 1 : -1, x = ((anim * (6 + i) * 1.2 + i * 61) % 360) - 80;
+    vehicle(dir > 0 ? x : 280 - x - 80, dir > 0 ? 155.4 : 159.6, dir > 0 ? 0 : Math.PI, i % 3 ? 4.4 : 10, 1.9, ["#C0392B", "#E8EDF2", "#2F6FC4", "#7F8C8D", "#E8B92E", "#1E8449"][i], null, null); }
+
+  // люди текущей смены (каска — цвет смены), имена при приближении
+  const hat = SHIFT_HAT[S.sh], base = S.sh * POSTS.length;
+  POSTS.forEach(([x, y, role], i) => { const jx = 0.4 * Math.sin(anim * 0.7 + i * 2.1), jy = 0.3 * Math.cos(anim * 0.5 + i);
+    person(x + jx, y + jy, hat);
+    if (k > 5.5) label(x + jx, y + jy + 1.6, NAMES[(base + i * 7 + S.d) % NAMES.length], 11, "#EEEAE0"); });
+  WALKS.forEach((P, i) => { const v = shuttle(P, 26 + i * 3, i * 0.17); person(v.x, v.y, hat); });
+  if (S.h > 7.5 && S.h < 18) OFFICE.forEach(([x, y]) => person(x, y, "#E8E2D4"));
+
+  // ночь: темнее, фонари и окна светятся
+  if (night > 0) {
+    ctx.fillStyle = `rgba(4,8,20,${0.55 * night})`; ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = "lighter";
+    LAMPS.forEach(([x, y]) => { const r = Math.max(6, 6 * k), g = ctx.createRadialGradient(sx(x), sy(y), 0, sx(x), sy(y), r);
+      g.addColorStop(0, `rgba(255,200,120,${0.32 * night})`); g.addColorStop(1, "rgba(255,200,120,0)"); ctx.fillStyle = g; ctx.fillRect(sx(x) - r, sy(y) - r, r * 2, r * 2); });
+    [[163, 78, 30], [96, 75, 26], [30, 60, 14], [148, 38, 10]].forEach(([x, y, r]) => { const R = r * k, g = ctx.createRadialGradient(sx(x), sy(y), 0, sx(x), sy(y), R);
+      g.addColorStop(0, `rgba(255,110,40,${0.22 * night})`); g.addColorStop(1, "rgba(255,110,40,0)"); ctx.fillStyle = g; ctx.fillRect(sx(x) - R, sy(y) - R, R * 2, R * 2); });
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  // подписи цехов и температуры
+  const big = k < 3.2;
+  [["Цех Блока 1", 33, 116.5, D.col.b1], ["Склад кубиков", 33, 132.6, D.col.fg], ["Карбонизация и дробление", 102, 97.6, D.col.ac], ["Активация паром", 166, 97.8, D.col.act],
+   ["Упаковка и склад АУ", 166, 124, D.col.fg], ["Навес скорлупы АУ", 102, 46.2, D.col.raw], ["Навес Блока 1", 23, 42.6, D.col.raw], ["Котельная", 152.5, 46.4, "#AAB4BE"],
+   ["Офис и ОТК", 87, 143.6, "#EEEAE0"], ["Гостевой дом", 115, 142.6, "#EEEAE0"], ["Причал", 67, -6, "#7FC8D8"], ["Брикеты барбекю", 157, 24.5, D.col.bbq],
+   ["Мастерская", 120, 125.2, "#AAB4BE"], ["Уксус", 52.5, 27.6, D.col.liq], ["Ворота", 160, 153.3, "#EEEAE0"]]
+    .forEach(([t, x, y, c]) => { if (big && ["Мастерская", "Уксус", "Ворота", "Брикеты барбекю", "Гостевой дом"].includes(t)) return;
+      if (k < 2.4) t = { "Карбонизация и дробление": "Карбонизация", "Активация паром": "Активация", "Упаковка и склад АУ": "Склад АУ", "Навес скорлупы АУ": "Скорлупа АУ", "Навес Блока 1": "Скорлупа Б1" }[t] || t;
+      label(x, y, t.toUpperCase(), big ? 11 : 13, c); });
+  if (k > 3.6) {
+    carbs.forEach(([x0, y], i) => tag(x0 + 17.5, y + 3.4, `${temp(530, 22, i)} °C`, "#FF8A4C"));
+    [61, 68, 75, 82, 89, 96].forEach((y, i) => tag(163, y + 3.1, S.maint && i === S.mk ? `№${i + 1} · ОСМОТР` : `№${i + 1} · ${temp(935, 18, i + 9)} °C · 210 кг/ч`, S.maint && i === S.mk ? "#F2C14E" : "#FF8A4C"));
+    tag(151, 27.2, `пар ${fmt(temp(118, 3, 4) / 10, 1)} бар`, "#7FC8D8");
+  } else {
+    const sm = k < 2.4;
+    tag(102, 79, sm ? `${temp(530, 15, 1)} °C` : `4 линии · ${temp(530, 15, 1)} °C`, "#FF8A4C");
+    tag(166, 79, sm ? `${S.maint ? 5 : 6}/6 · ${temp(935, 12, 2)} °C` : `${S.maint ? 5 : 6} из 6 печей · ${temp(935, 12, 2)} °C`, "#FF8A4C"); tag(30, 67, `${temp(525, 15, 3)} °C`, "#FF8A4C");
+  }
+  drawRadar(S);
+  return S;
+}
+
+// ---------- мини-радар: вся площадка, рамка — что видно на карте
+const rc = $("radar"), rx = rc.getContext("2d");
+function drawRadar(S) {
+  const R = rc.clientWidth, d = Math.min(2, devicePixelRatio || 1); if (rc.width !== R * d) { rc.width = rc.height = R * d; }
+  rx.setTransform(d, 0, 0, d, 0, 0); rx.clearRect(0, 0, R, R);
+  rx.save(); rx.beginPath(); rx.arc(R / 2, R / 2, R / 2, 0, 7); rx.clip();
+  const s = R / 250, X = x => R / 2 + (x - 100) * s, Y = y => R / 2 - (y - 65) * s;
+  rx.fillStyle = "#1A2A1E"; rx.fillRect(0, 0, R, R); rx.fillStyle = "#0E3540"; rx.fillRect(0, Y(-14), R, R);
+  rx.fillStyle = "#3A3E44"; rx.fillRect(X(0), Y(150), 200 * s, 162 * s); rx.fillStyle = "#24272B"; rx.fillRect(0, Y(163), R, 11 * s);
+  D.scene.forEach(o => { if (!o.w) return; rx.fillStyle = "#6E7780"; rx.fillRect(X(o.x), Y(o.y + o.d), o.w * s, o.d * s); });
+  S.barges.forEach(q => { if (q.on) { rx.fillStyle = "#7FC8D8"; rx.fillRect(X(q.x) - 3, Y(q.y) - 1.5, 6, 3); } });
+  S.trucks.forEach(q => { if (q.on) { rx.fillStyle = "#F0935A"; rx.beginPath(); rx.arc(X(q.x), Y(q.y), 2.4, 0, 7); rx.fill(); } });
+  rx.strokeStyle = "#F2C14E"; rx.lineWidth = 1.4; rx.strokeRect(X(wx(0)), Y(wy(0)), W / k * s, H / k * s);
+  rx.restore(); rx.fillStyle = "#EEEAE0"; rx.font = "600 11px Oswald, sans-serif"; rx.textAlign = "center"; rx.fillText("С", R / 2, 12);
+}
+
+// ---------- панели
+const DOW = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"], MON = ["янв.", "февр.", "марта", "апр.", "мая", "июня", "июля", "авг.", "сент.", "окт.", "нояб.", "дек."];
+function panels(S, ms) {
+  const t = new Date(ms + TZ);
+  $("cTime").textContent = [t.getUTCHours(), t.getUTCMinutes(), t.getUTCSeconds()].map(v => String(v).padStart(2, "0")).join(":");
+  $("cDate").textContent = `${DOW[t.getUTCDay()]}, ${t.getUTCDate()} ${MON[t.getUTCMonth()]} · Вьетнам`;
+  $("tAC").textContent = fmt(S.ac, 1); $("tBags").textContent = fmt(Math.floor(S.ac / 0.5)); $("tShell").textContent = fmt(S.shell);
+  $("tCubes").textContent = fmt(S.cubes, 1); $("tCont").textContent = fmt(S.cont + S.contB1); $("tRev").textContent = "$" + fmt(S.rev);
+  const [n, a, b] = SHIFTS[S.sh]; $("shName").textContent = `${n} · ${hhmm(a)}–${hhmm(b)}`;
+  $("shPeople").textContent = (n => `${n} ${plural(n, "человек", "человека", "человек")}`)(POSTS.length + WALKS.length + (S.h > 7.5 && S.h < 18 ? OFFICE.length : 0));
+  $("shAct").textContent = S.maint ? `5 из 6 · печь №${S.mk + 1} на осмотре` : "6 из 6 · 850–1 000 °C";
+  $("shAct").className = "pill " + (S.maint ? "warn" : "hot");
+  const bq = S.barges.find(q => q.on);
+  $("shWharf").textContent = bq ? (bq.ph === "unload" ? `разгрузка «${bq.b.name}» ${Math.round((1 - bq.k) * 100)}%` : bq.ph === "in" ? `«${bq.b.name}» подходит` : `«${bq.b.name}» уходит`) : "свободен";
+  $("shWharf").className = "pill " + (bq ? "ok" : "");
+  $("shStock").textContent = `${fmt(Math.max(0, S.stockBags))} биг-бэгов · ${fmt(Math.max(0, S.stockBags) / 2)} т`;
+  if (cardId) { const L = { act: S.maint ? `Сейчас: 5 печей в работе, №${S.mk + 1} на осмотре` : "Сейчас: 6 печей в работе, ≈1 260 кг/ч",
+    carb: "Сейчас: 4 линии в работе", hall_b1: `Сейчас: ${fmt(S.cubes, 1)} т кубиков с начала суток`, pack_au: `На складе: ${fmt(Math.max(0, S.stockBags))} биг-бэгов`,
+    wharf: $("shWharf").textContent, shed_au: `Принято сегодня: ${fmt(S.shell)} т`, office: "ОТК: йодное число ≥1 000 мг/г" }[cardId];
+    $("cL").textContent = L || ""; }
+  renderLog(S);
+}
+function chart(id, key, nominal, color, S) {
+  const c = $(id), w = c.clientWidth, h = c.clientHeight, d = Math.min(2, devicePixelRatio || 1);
+  if (c.width !== Math.round(w * d)) { c.width = Math.round(w * d); c.height = Math.round(h * d); }
+  const g = c.getContext("2d"); g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, w, h);
+  const N = 14, vals = []; for (let i = N - 1; i >= 0; i--) { const dd = S.d - i; vals.push(i === 0 ? nominal * dayF(dd, key) * S.h / 24 : nominal * dayF(dd, key)); }
+  const top = nominal * 1.2, L = 34, B = 22, T = 12, bw = (w - L - 8) / N;
+  g.font = "500 11px 'JetBrains Mono', monospace"; g.textBaseline = "middle"; g.textAlign = "right";
+  [0, 0.5, 1].forEach(f => { const v = top * f, y = h - B - (h - B - T) * f; g.strokeStyle = "rgba(255,255,255,.07)"; g.beginPath(); g.moveTo(L, y); g.lineTo(w - 4, y); g.stroke();
+    g.fillStyle = "#9A9F98"; g.fillText(fmt(v), L - 5, y); });
+  const yn = h - B - (h - B - T) * nominal / top; g.strokeStyle = "rgba(242,193,78,.6)"; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(L, yn); g.lineTo(w - 4, yn); g.stroke(); g.setLineDash([]);
+  g.fillStyle = "#F2C14E"; g.textAlign = "left"; g.fillText("норма " + fmt(nominal, 1), L + 4, yn - 8);
+  vals.forEach((v, i) => { const bh = (h - B - T) * v / top, x = L + i * bw + 2; g.fillStyle = i === N - 1 ? "rgba(255,255,255,.18)" : color;
+    g.fillRect(x, h - B - bh, bw - 4, bh); if (i === N - 1) { g.strokeStyle = color; g.strokeRect(x + 0.5, h - B - bh + 0.5, bw - 5, bh - 1); } });
+  g.fillStyle = "#9A9F98"; g.textAlign = "center";
+  [0, 7, 13].forEach(i => { const t = new Date((S.d - (N - 1 - i)) * DAY); g.fillText(i === 13 ? "сегодня" : `${t.getUTCDate()}.${String(t.getUTCMonth() + 1).padStart(2, "0")}`, L + i * bw + bw / 2, h - 9); });
+}
+$("foot").textContent = `Нормы из финмодели проекта: активированный уголь ${fmt(D.acDay * 365)} т/год (≈${fmt(D.acDay, 1)} т в сутки, по $${fmt(D.priceAC)}/т), ` +
+  `кальянные кубики 300 т/мес (по $${fmt(D.priceCube)}/т), скорлупа с барж ≈${fmt(D.shellAU + D.shellB1)} т в сутки (по $${fmt(D.priceShell)}/т с доставкой). ` +
+  `Сутки отличаются от нормы на ±7%. Имена рабочих, названия барж и номера фур вымышлены. Планировка — 3D-эскиз генплана, оборудование — эскиз до проекта.`;
+
+let lastPanel = 0, lastChart = -1;
+function loop() {
+  const S = frame(), now = performance.now();
+  if (now - lastPanel > 250) { panels(S, simNow()); lastPanel = now; }
+  const ck = S.d * 100 + Math.floor(S.h * 4);
+  if (ck !== lastChart) { lastChart = ck; chart("chAC", 1, D.acDay, "#F0935A", S); chart("chSh", 3, D.shellAU + D.shellB1, "#B97A45", S); chart("chCu", 2, D.cubeDay, "#4F8FD6", S); }
+  requestAnimationFrame(loop);
+}
+window.addEventListener("resize", () => { resize(); lastChart = -1; });
+resize(); fitAll(); loop();
+</script>
+</body>
+</html>
