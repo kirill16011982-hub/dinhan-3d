@@ -18,7 +18,7 @@
   color-scheme: dark;
 }
 * { box-sizing:border-box; }
-html, body { margin:0; background:var(--ground); color:var(--paper); font-family:var(--text); font-size:14px; }
+html, body { margin:0; } body { background:var(--ground); color:var(--paper); font-family:var(--text); font-size:14px; }
 body { padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px));
   padding-block:max(14px, env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-bottom, 0px)); }
 .wrap { margin:0 auto; display:flex; flex-direction:column; gap:14px; }
@@ -92,6 +92,16 @@ aside { display:flex; flex-direction:column; gap:14px; min-width:0; }
   .zoom { left:6px; bottom:6px; gap:4px; } .zoom .btn { min-height:32px; width:34px; }
   .mapnote { font-size:10px; }
 }
+/* светлая тема (по умолчанию): дневная бумага, тёмный текст, те же акценты чуть темнее для контраста */
+body.light { --ground:#EEF0EA; --panel:#FFFFFF; --raise:#F2F3EE; --line:#D6DAD0; --paper:#1D2326; --muted:#5D655F;
+  --ember:#C8571F; --gold:#9A6A00; --steam:#1F6F84; --leaf:#2E7D3A; color-scheme: light; }
+body.light h1 { text-shadow:2px 2px 0 rgba(0,0,0,.12); }
+body.light .btn.on { background:#1D2326; color:#FFFFFF; border-color:#1D2326; }
+body.light .mapbox { background:#DCE3D6; }
+body.light #card, body.light .mapnote, body.light #mclock { background:rgba(255,255,255,.95); }
+body.light #card p { color:#323A3E; }
+body.light #log li { border-bottom-color:rgba(0,0,0,.06); }
+body.light .clock i { color:var(--ember); }
 @media (prefers-reduced-motion: reduce) { #log li.new { background:none; } }
 </style>
 </head>
@@ -108,6 +118,8 @@ aside { display:flex; flex-direction:column; gap:14px; min-width:0; }
       <button class="btn on" id="s1" data-s="1">Живое время</button>
       <button class="btn" id="s60" data-s="60">Час за минуту</button>
       <button class="btn" id="s600" data-s="600">Сутки за 2,4 мин</button>
+      <button class="btn" id="bNight" title="Темнеть ночью по вьетнамскому времени">Ночь по времени</button>
+      <button class="btn" id="bTheme">Тёмная тема</button>
     </div>
   </header>
 
@@ -173,6 +185,8 @@ function setSpeed(s) { simBase = simNow(); realBase = performance.now(); speed =
   document.querySelectorAll("[data-s]").forEach(b => b.classList.toggle("on", +b.dataset.s === s));
   $("cSpeed").textContent = s === 1 ? "ЖИВОЕ" : "×" + s; }
 document.querySelectorAll("[data-s]").forEach(b => b.addEventListener("click", () => setSpeed(+b.dataset.s)));
+$("bTheme").addEventListener("click", () => { THEME = THEME === "light" ? "dark" : "light"; store.set("dinhan-theme", THEME); applyTheme(); });
+$("bNight").addEventListener("click", () => { NIGHT = !NIGHT; store.set("dinhan-night", NIGHT ? "1" : "0"); applyTheme(); });
 { const m = location.hash.match(/^#t(\d{1,2})(\d\d)?$/);        // …html#t2130 — открыть на 21:30 (для проверки ночи)
   if (m) simBase = Math.floor((simBase + TZ) / DAY) * DAY - TZ + (+m[1] + (+(m[2] || 0)) / 60) * 36e5; }
 const dayIdx = ms => Math.floor((ms + TZ) / DAY);
@@ -260,43 +274,60 @@ for (let i = 0; i < 2200; i++) { const x = WB.x0 + rnd(i) * (WB.x1 - WB.x0), y =
 const PALMS = [[-2, 20], [-2, 60], [-2, 100], [-2, 140], [202, 15], [202, 55], [202, 95], [202, 135], [30, 151], [90, 151], [130, 151], [190, 151]];
 
 // статичный слой рисуется заново каждый кадр в мировых метрах — линии чёткие при любом приближении
+// палитры карты: светлая (день, по умолчанию) и тёмная
+const PAL = {
+  light: { bg: "#DCE3D6", ground: "#8DAE6A", fields: ["#C3CB82", "#B2C176", "#CFCB92"], river: "#3F95AA", bank: "#A3B27A",
+    trees: ["#4E8A3E", "#5C9746", "#467E3A", "#69A24E", "#558C42"], curb: "#C2C6C8", asph: "#62676C", site: "#CBCDC8", quay: "#B5B8B4",
+    road: "#70757A", floor: "#E3E4DF", office: "#EEE8DA", wall: "#6D767E", canopy: "#D8CBB2", pad: "#C6C9C5", weigh: "#C2C6C9",
+    lawn: "#6FA352", fence: "#6D767E", shadow: "rgba(40,50,40,.22)", night: false },
+  dark: { bg: "#0B0D0F", ground: "#1C2B1D", fields: ["#3C4E2A", "#34472A", "#455A30"], river: "#0F3A46", bank: "#2E3B2C",
+    trees: ["#24492A", "#2B5530", "#1F4026", "#305C33", "#27502C"], curb: "#5B6066", asph: "#303337", site: "#3A3D40", quay: "#4A4E53",
+    road: "#2A2C30", floor: "#2D3136", office: "#4A4740", wall: "#C9CED3", canopy: "#3A342D", pad: "#34383C", weigh: "#3A3E44",
+    lawn: "#2D5A33", fence: "#A9B0B6", shadow: "rgba(0,0,0,.38)" },
+};
+const store = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
+let THEME = store.get("dinhan-theme") === "dark" ? "dark" : "light", P = PAL[THEME];
+let NIGHT = store.get("dinhan-night") === "1";          // ночь по вьетнамскому времени — по кнопке, по умолчанию всегда день
+function applyTheme() { P = PAL[THEME]; document.body.classList.toggle("light", THEME === "light");
+  $("bTheme").textContent = THEME === "light" ? "Тёмная тема" : "Светлая тема"; $("bNight").classList.toggle("on", NIGHT); lastChart = -1; }
+
 function drawStatic(g, V) {
   const vis = (x, y, w, d) => x + w > V.x0 && x < V.x1 && y + d > V.y0 && y < V.y1;
   const R = (x, y, w, d, c) => { g.fillStyle = c; g.fillRect(x, y, w, d); };
   const S = (x, y, w, d, c, lw) => { g.strokeStyle = c; g.lineWidth = lw || 0.3; g.strokeRect(x, y, w, d); };
   const C = (x, y, r, c) => { g.fillStyle = c; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); };
   const L = (pts, c, w, dash) => { g.strokeStyle = c; g.lineWidth = w; g.setLineDash(dash || []); g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke(); g.setLineDash([]); };
-  const SH = (x, y, w, d, h) => R(x + h * 0.55, y - h * 0.55, w, d, "rgba(0,0,0,.38)");      // тень на юго-восток
+  const SH = (x, y, w, d, h) => R(x + h * 0.55, y - h * 0.55, w, d, P.shadow);      // тень на юго-восток
   // цилиндр лёжа (печи, котлы, барабаны): тёмный край — светлая середина — тёмный край
   const CY = (x, y, w, d, c) => { const gr = g.createLinearGradient(0, y, 0, y + d); gr.addColorStop(0, shade(c, -0.45)); gr.addColorStop(0.55, shade(c, 0.25)); gr.addColorStop(1, shade(c, -0.35)); g.fillStyle = gr; g.fillRect(x, y, w, d); };
   const BALL = (x, y, r, c) => { const gr = g.createRadialGradient(x - r * 0.35, y + r * 0.35, r * 0.1, x, y, r); gr.addColorStop(0, shade(c, 0.35)); gr.addColorStop(1, shade(c, -0.3)); g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); };
 
   // земля, поля, река
-  R(V.x0, V.y0, V.x1 - V.x0, V.y1 - V.y0, "#1C2B1D");
+  R(V.x0, V.y0, V.x1 - V.x0, V.y1 - V.y0, P.ground);
   for (let i = 0; i < 18; i++) for (let j = 0; j < 3; j++) { const x = -240 + i * 38, y = 165 + j * 11; if (!vis(x, y, 36, 9.5)) continue;
-    R(x, y, 36, 9.5, ["#3C4E2A", "#34472A", "#455A30"][(i + j) % 3]);
+    R(x, y, 36, 9.5, P.fields[(i + j) % 3]);
     for (let r = 0.8; r < 9.5; r += 1.2) L([[x, y + r], [x + 36, y + r]], "rgba(0,0,0,.12)", 0.25); }
-  if (V.y0 < -14) { R(V.x0, Math.max(V.y0, -100), V.x1 - V.x0, -14 - Math.max(V.y0, -100), "#0F3A46");
+  if (V.y0 < -14) { R(V.x0, Math.max(V.y0, -100), V.x1 - V.x0, -14 - Math.max(V.y0, -100), P.river);
     for (let i = 0; i < 300; i++) { const x = WB.x0 + rnd(i * 3.1) * (WB.x1 - WB.x0), y = -95 + rnd(i * 5.7) * 78; if (vis(x, y, 6, 1)) L([[x, y], [x + 2 + rnd(i) * 5, y]], "rgba(150,215,225,.16)", 0.22); }
-    R(V.x0, -16, V.x1 - V.x0, 2.2, "#2E3B2C"); }
+    R(V.x0, -16, V.x1 - V.x0, 2.2, P.bank); }
   // деревья: тень, крона, блик
   TREES.forEach(([x, y, r, c, light]) => { if (!vis(x - r, y - r, 2 * r + 1.5, 2 * r)) return;
-    C(x + 0.9, y - 0.9, r, "rgba(0,0,0,.35)"); C(x, y, r, ["#24492A", "#2B5530", "#1F4026", "#305C33", "#27502C"][c]);
+    C(x + 0.9, y - 0.9, r, "rgba(0,0,0,.35)"); C(x, y, r, P.trees[c]);
     if (k > 1.6) C(x - r * 0.3, y + r * 0.3, r * 0.45, light ? "rgba(140,190,110,.22)" : "rgba(120,170,100,.12)"); });
   // дорога промпарка: асфальт, бордюры, белая разметка
-  R(V.x0, 151, V.x1 - V.x0, 13, "#5B6066"); R(V.x0, 152, V.x1 - V.x0, 11, "#303337");
+  R(V.x0, 151, V.x1 - V.x0, 13, P.curb); R(V.x0, 152, V.x1 - V.x0, 11, P.asph);
   L([[V.x0, 157.5], [V.x1, 157.5]], "#E8E6DF", 0.22, [3, 3]); L([[V.x0, 152.6], [V.x1, 152.6]], "rgba(232,230,223,.5)", 0.15); L([[V.x0, 162.4], [V.x1, 162.4]], "rgba(232,230,223,.5)", 0.15);
   // площадка: бетон плитами, проезды асфальтом, забор
-  R(0, -12, 200, 162, "#3A3D40");
+  R(0, -12, 200, 162, P.site);
   if (k > 2) for (let x = 0; x <= 200; x += 6) L([[x, -12], [x, 150]], "rgba(0,0,0,.10)", 0.08);
   if (k > 2) for (let y = -12; y <= 150; y += 6) L([[0, y], [200, y]], "rgba(0,0,0,.10)", 0.08);
-  R(6, -12, 122, 12, "#4A4E53");
-  [[58, 0, 14, 150], [132, 0, 8, 150], [0, 48, 200, 8], [0, 100, 200, 6], [20, 142, 180, 8]].forEach(([x, y, w, d]) => { R(x, y, w, d, "#2A2C30"); S(x, y, w, d, "rgba(200,200,190,.18)", 0.15); });
+  R(6, -12, 122, 12, P.quay);
+  [[58, 0, 14, 150], [132, 0, 8, 150], [0, 48, 200, 8], [0, 100, 200, 6], [20, 142, 180, 8]].forEach(([x, y, w, d]) => { R(x, y, w, d, P.road); S(x, y, w, d, "rgba(200,200,190,.18)", 0.15); });
   [[[65, 0], [65, 150]], [[136, 0], [136, 150]], [[0, 52], [200, 52]], [[0, 103], [200, 103]], [[22, 146], [200, 146]]].forEach(p => L(p, "rgba(236,234,226,.75)", 0.16, [2, 2.5]));
   // забор: сетка со столбами
-  L([[0, -12], [0, 150], [154, 150]], "#A9B0B6", 0.18); L([[166, 150], [200, 150], [200, -12]], "#A9B0B6", 0.18);
+  L([[0, -12], [0, 150], [154, 150]], P.fence, 0.18); L([[166, 150], [200, 150], [200, -12]], P.fence, 0.18);
   if (k > 3) for (let y = -12; y <= 150; y += 3) { C(0, y, 0.15, "#C8CDD2"); C(200, y, 0.15, "#C8CDD2"); }
-  R(154, 149.4, 12, 1.2, "#2A2C30"); L([[154, 150], [160, 151.8]], "#E8C22E", 0.35); L([[166, 150], [160, 151.8]], "#E8C22E", 0.35);
+  R(154, 149.4, 12, 1.2, P.road); L([[154, 150], [160, 151.8]], "#E8C22E", 0.35); L([[166, 150], [160, 151.8]], "#E8C22E", 0.35);
   for (let x = 10; x < 128; x += 8) C(x, -11.2, 0.45, "#9AA0A6");
   PALMS.forEach(([x, y]) => palm(g, x, y));
   // здания и навесы по генплану
@@ -304,24 +335,24 @@ function drawStatic(g, V) {
     const z = ZONE(o.id);
     if (o.k === "hall" || o.k === "box" || o.k === "office") {
       SH(o.x, o.y, o.w, o.d, o.h || 6);
-      R(o.x, o.y, o.w, o.d, o.k === "office" ? "#4A4740" : "#2D3136");
+      R(o.x, o.y, o.w, o.d, o.k === "office" ? P.office : P.floor);
       if (k > 2.5 && o.k !== "office") for (let x = o.x + 6; x < o.x + o.w; x += 6) L([[x, o.y], [x, o.y + o.d]], "rgba(255,255,255,.035)", 0.1);
-      S(o.x + 0.25, o.y + 0.25, o.w - 0.5, o.d - 0.5, "#C9CED3", 0.5);          // стены
+      S(o.x + 0.25, o.y + 0.25, o.w - 0.5, o.d - 0.5, P.wall, 0.5);          // стены
       S(o.x + 0.75, o.y + 0.75, o.w - 1.5, o.d - 1.5, z, 0.22);               // цвет участка
       (o.ds || []).forEach(dx => { const dx0 = o.x + dx; if (o.ridge === "y") R(o.x - 0.1, o.y + dx - 2, 0.7, 4, "#5B6570"); else R(dx0 - 2, o.y - 0.1, 4, 0.7, "#5B6570"); });
     }
-    else if (o.k === "canopy") { SH(o.x, o.y, o.w, o.d, 3); R(o.x, o.y, o.w, o.d, "#3A342D"); S(o.x, o.y, o.w, o.d, z, 0.3);
+    else if (o.k === "canopy") { SH(o.x, o.y, o.w, o.d, 3); R(o.x, o.y, o.w, o.d, P.canopy); S(o.x, o.y, o.w, o.d, z, 0.3);
       for (let x = o.x; x <= o.x + o.w + 0.1; x += 6) for (let y = o.y; y <= o.y + o.d + 0.1; y += 6) R(x - 0.25, y - 0.25, 0.5, 0.5, "#8A8F95"); }
-    else if (o.k === "tanks") { R(o.x, o.y, o.w, o.d, "#34383C"); S(o.x, o.y, o.w, o.d, "#8A9096", 0.5);
+    else if (o.k === "tanks") { R(o.x, o.y, o.w, o.d, P.pad); S(o.x, o.y, o.w, o.d, "#8A9096", 0.5);
       for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) { const x = o.x + 3.8 + i * 6.7, y = o.y + 4.8 + j * 8.4; C(x + 1.3, y - 1.3, 2.9, "rgba(0,0,0,.35)"); BALL(x, y, 2.9, "#7FB8DD"); C(x, y, 0.5, "#4A6F88"); } }
     else if (o.k === "cyl") { C(o.cx + o.r * 0.8, o.cy - o.r * 0.8, o.r, "rgba(0,0,0,.35)"); BALL(o.cx, o.cy, o.r, o.c || "#AAB"); }
     else if (o.k === "stack") BALL(o.cx, o.cy, o.r, "#8D969F");
-    else if (o.k === "los") { R(o.x, o.y, o.w, o.d, "#34383C"); S(o.x, o.y, o.w, o.d, "#8A9096", 0.5); R(o.x + 1.5, o.y + 1.5, o.w - 3, 7.5, "#2D6670"); R(o.x + 1.5, o.y + 11, o.w - 3, 7.5, "#3B7B6E"); }
+    else if (o.k === "los") { R(o.x, o.y, o.w, o.d, P.pad); S(o.x, o.y, o.w, o.d, "#8A9096", 0.5); R(o.x + 1.5, o.y + 1.5, o.w - 3, 7.5, "#2D6670"); R(o.x + 1.5, o.y + 11, o.w - 3, 7.5, "#3B7B6E"); }
     else if (o.k === "pool") { R(o.x, o.y, o.w, o.d, "#1F6274"); S(o.x, o.y, o.w, o.d, "#B8C0C6", 0.4); }
-    else if (o.k === "weigh") { R(o.x, o.y, o.w, o.d, "#3A3E44"); R(o.x + 2, o.y + 2.5, o.w - 4, o.d - 5, "#6B737C"); S(o.x, o.y, o.w, o.d, "#8A9096", 0.4); }
+    else if (o.k === "weigh") { R(o.x, o.y, o.w, o.d, P.weigh); R(o.x + 2, o.y + 2.5, o.w - 4, o.d - 5, "#6B737C"); S(o.x, o.y, o.w, o.d, "#8A9096", 0.4); }
   });
   // гостевой дом: газон, бассейн, черепичная крыша (дом не в разрезе)
-  R(105, 127, 20, 14, "#2D5A33"); SH(108, 132.5, 14, 8, 7);
+  R(105, 127, 20, 14, P.lawn); SH(108, 132.5, 14, 8, 7);
   const rf = g.createLinearGradient(0, 132.5, 0, 140.5); rf.addColorStop(0, "#9E4A2A"); rf.addColorStop(0.5, "#D2693E"); rf.addColorStop(1, "#9E4A2A"); g.fillStyle = rf; g.fillRect(108, 132.5, 14, 8);
   L([[108, 136.5], [122, 136.5]], "#7E3A20", 0.25); R(113.4, 134.9, 3.2, 3.2, "#E9E4D8"); C(115, 136.5, 0.6, "#E2B13C");
   R(110, 128.4, 10, 2.8, "#3FB2CC"); S(110, 128.4, 10, 2.8, "#EDE8DC", 0.3);
@@ -506,7 +537,7 @@ function frame() {
   const now = performance.now(), dt = Math.min(0.1, (now - lastReal) / 1000); lastReal = now;
   anim += dt * Math.min(speed, 6);
   const ms = simNow(), S = state(ms), h = S.h, night = h < 5.6 || h > 18.4 ? 1 : h < 6.4 ? (6.4 - h) / 0.8 : h > 17.6 ? (h - 17.6) / 0.8 : 0;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.fillStyle = "#0B0D0F"; ctx.fillRect(0, 0, W, H);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.fillStyle = P.bg; ctx.fillRect(0, 0, W, H);
   ctx.imageSmoothingEnabled = true;
   ctx.setTransform(dpr * k, 0, 0, -dpr * k, dpr * (W / 2 - cx * k), dpr * (H / 2 + cy * k));
   drawStatic(ctx, { x0: wx(0), x1: wx(W), y0: wy(H), y1: wy(0) });
@@ -592,7 +623,7 @@ function frame() {
   if (S.h > 7.5 && S.h < 18) OFFICE.forEach(([x, y]) => person(x, y, "#E8E2D4"));
 
   // ночь: темнее, фонари и окна светятся
-  if (night > 0) {
+  if (NIGHT && night > 0) {
     ctx.fillStyle = `rgba(6,10,24,${0.42 * night})`; ctx.fillRect(0, 0, W, H);
     ctx.globalCompositeOperation = "lighter";
     // фонари: небольшое пятно света на асфальте (≈5 м), лампа — яркая точка
@@ -675,11 +706,11 @@ function chart(id, key, nominal, color, S) {
   const N = 14, vals = []; for (let i = N - 1; i >= 0; i--) { const dd = S.d - i; vals.push(i === 0 ? nominal * dayF(dd, key) * S.h / 24 : nominal * dayF(dd, key)); }
   const top = nominal * 1.2, L = 34, B = 22, T = 12, bw = (w - L - 8) / N;
   g.font = "500 11px 'JetBrains Mono', monospace"; g.textBaseline = "middle"; g.textAlign = "right";
-  [0, 0.5, 1].forEach(f => { const v = top * f, y = h - B - (h - B - T) * f; g.strokeStyle = "rgba(255,255,255,.07)"; g.beginPath(); g.moveTo(L, y); g.lineTo(w - 4, y); g.stroke();
+  [0, 0.5, 1].forEach(f => { const v = top * f, y = h - B - (h - B - T) * f; g.strokeStyle = THEME === "light" ? "rgba(0,0,0,.08)" : "rgba(255,255,255,.07)"; g.beginPath(); g.moveTo(L, y); g.lineTo(w - 4, y); g.stroke();
     g.fillStyle = "#9A9F98"; g.fillText(fmt(v), L - 5, y); });
   const yn = h - B - (h - B - T) * nominal / top; g.strokeStyle = "rgba(242,193,78,.6)"; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(L, yn); g.lineTo(w - 4, yn); g.stroke(); g.setLineDash([]);
   g.fillStyle = "#F2C14E"; g.textAlign = "left"; g.fillText("норма " + fmt(nominal, 1), L + 4, yn - 8);
-  vals.forEach((v, i) => { const bh = (h - B - T) * v / top, x = L + i * bw + 2; g.fillStyle = i === N - 1 ? "rgba(255,255,255,.18)" : color;
+  vals.forEach((v, i) => { const bh = (h - B - T) * v / top, x = L + i * bw + 2; g.fillStyle = i === N - 1 ? (THEME === "light" ? "rgba(0,0,0,.08)" : "rgba(255,255,255,.18)") : color;
     g.fillRect(x, h - B - bh, bw - 4, bh); if (i === N - 1) { g.strokeStyle = color; g.strokeRect(x + 0.5, h - B - bh + 0.5, bw - 5, bh - 1); } });
   g.fillStyle = "#9A9F98"; g.textAlign = "center";
   [0, 7, 13].forEach(i => { const t = new Date((S.d - (N - 1 - i)) * DAY); g.fillText(i === 13 ? "сегодня" : `${t.getUTCDate()}.${String(t.getUTCMonth() + 1).padStart(2, "0")}`, L + i * bw + bw / 2, h - 9); });
@@ -698,7 +729,7 @@ function loop() {
   requestAnimationFrame(loop);
 }
 window.addEventListener("resize", () => { resize(); lastChart = -1; });
-resize(); fitAll(); loop();
+applyTheme(); resize(); fitAll(); loop();
 </script>
 </body>
 </html>
