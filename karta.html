@@ -21,7 +21,7 @@
 html, body { margin:0; background:var(--ground); color:var(--paper); font-family:var(--text); font-size:14px; }
 body { padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px));
   padding-block:max(14px, env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-bottom, 0px)); }
-.wrap { max-width:1500px; margin:0 auto; display:flex; flex-direction:column; gap:14px; }
+.wrap { margin:0 auto; display:flex; flex-direction:column; gap:14px; }
 header { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:12px 20px; }
 .eyebrow { font-family:var(--display); font-weight:600; font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:var(--gold); }
 h1 { margin:2px 0 0; font-family:var(--display); font-weight:700; font-style:italic; font-size:clamp(34px, 6vw, 64px);
@@ -38,10 +38,14 @@ h1 { margin:2px 0 0; font-family:var(--display); font-weight:700; font-style:ita
 .btn:hover { border-color:var(--muted); }
 .btn.on { background:var(--gold); color:#121212; border-color:var(--gold); }
 .btn:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
-.main { display:grid; grid-template-columns:minmax(0, 1fr) 340px; gap:14px; }
-.mapbox { position:relative; border:1px solid var(--line); background:#0F1412; height:min(78vh, 860px); min-height:420px; overflow:hidden; touch-action:none; }
+.main { display:grid; grid-template-columns:minmax(0, 1fr) clamp(320px, 22vw, 420px); gap:14px; }
+.mapbox { position:relative; border:1px solid var(--line); background:#0F1412; height:calc(100vh - 150px); min-height:480px; overflow:hidden; touch-action:none; }
 #map { position:absolute; inset:0; width:100%; height:100%; display:block; cursor:grab; }
 #map.drag { cursor:grabbing; }
+.mapbox:fullscreen { height:100vh; border:0; }
+#mclock { position:absolute; right:12px; top:10px; display:none; font-family:var(--display); font-size:26px; font-weight:600; font-variant-numeric:tabular-nums;
+  background:rgba(11,13,15,.82); border:1px solid var(--line); padding:4px 12px; pointer-events:none; }
+.mapbox:fullscreen #mclock { display:block; }
 #radar { position:absolute; right:12px; bottom:12px; width:150px; height:150px; border-radius:50%; pointer-events:none;
   box-shadow:0 0 0 3px #000, 0 0 0 5px #3A3F46, 0 8px 20px rgba(0,0,0,.6); }
 .zoom { position:absolute; left:10px; bottom:10px; display:flex; flex-direction:column; gap:6px; }
@@ -110,8 +114,9 @@ aside { display:flex; flex-direction:column; gap:14px; min-width:0; }
     <div class="mapbox" id="mapbox">
       <canvas id="map" aria-label="Карта фабрики сверху: цеха без крыш, печи с температурами, баржи, погрузчики, фуры и рабочие по сменам"></canvas>
       <div class="mapnote">Тяни — двигать · колесо или два пальца — приближать · нажми на цех</div>
-      <div class="zoom"><button class="btn" id="zIn" aria-label="Приблизить">+</button><button class="btn" id="zOut" aria-label="Отдалить">−</button><button class="btn" id="zAll" aria-label="Вся площадка">⌂</button></div>
+      <div class="zoom"><button class="btn" id="zIn" aria-label="Приблизить">+</button><button class="btn" id="zOut" aria-label="Отдалить">−</button><button class="btn" id="zAll" aria-label="Вся площадка">⌂</button><button class="btn" id="zFull" aria-label="Во весь экран" title="Во весь экран">⛶</button></div>
       <canvas id="radar" aria-hidden="true"></canvas>
+      <div id="mclock">--:--</div>
       <div id="card" hidden><button class="x" id="cardX" aria-label="Закрыть">×</button><div class="z" id="cZ"></div><h3 id="cT"></h3><div class="a" id="cA"></div><p id="cP"></p><div class="live" id="cL"></div></div>
     </div>
     <aside>
@@ -235,8 +240,8 @@ const OFFICE = [[75.2, 132.6], [78.7, 132.6], [82.2, 132.6], [85.7, 132.6], [75.
 const SHIFT_HAT = ["#F2C14E", "#F0935A", "#7FC8D8"];
 
 // ---------- геометрия карты (метры: x — восток, y — север; участок 200 × 150 м, река на юге)
-const WB = { x0: -70, x1: 270, y0: -95, y1: 185 };
-const SPX = 7;                                                  // пикселей на метр в заготовке статичного слоя
+const WB = { x0: -240, x1: 440, y0: -110, y1: 200 };
+const SPX = 6;                                                  // пикселей на метр в заготовке статичного слоя
 const st = document.createElement("canvas");
 st.width = (WB.x1 - WB.x0) * SPX; st.height = (WB.y1 - WB.y0) * SPX;
 const BL = "#2F8FD6", SV = "#C3C9D0", RD = "#D93A2B";
@@ -250,16 +255,16 @@ function drawStatic() {
   const L = (pts, c, w, dash) => { g.strokeStyle = c; g.lineWidth = w; g.setLineDash(dash || []); g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke(); g.setLineDash([]); };
   // земля, поля и джунгли вокруг
   R(WB.x0, WB.y0, WB.x1 - WB.x0, WB.y1 - WB.y0, "#16221A");
-  for (let i = 0; i < 9; i++) for (let j = 0; j < 2; j++) R(-70 + i * 38, 164 + j * 11, 36, 9.5, ["#2A3A22", "#24331E", "#30422A"][(i + j) % 3]);
-  for (let i = 0; i < 900; i++) { const x = WB.x0 + rnd(i) * (WB.x1 - WB.x0), y = -14 + rnd(i + 0.5) * 178;
+  for (let i = 0; i < 18; i++) for (let j = 0; j < 3; j++) R(-240 + i * 38, 164 + j * 11, 36, 9.5, ["#2A3A22", "#24331E", "#30422A"][(i + j) % 3]);
+  for (let i = 0; i < 2600; i++) { const x = WB.x0 + rnd(i) * (WB.x1 - WB.x0), y = -14 + rnd(i + 0.5) * 178;
     if (x > -2 && x < 202 && y > -16 && y < 152) continue; if (y > 151 && y < 164) continue;
     C(x, y, 1.2 + rnd(i + 0.2) * 1.8, ["#1F3A24", "#244428", "#1A3020", "#2B4D2E"][i % 4]); }
   // река и противоположный берег
-  R(WB.x0, WB.y0, WB.x1 - WB.x0, 81, "#0E3540");
-  for (let i = 0; i < 160; i++) { const x = WB.x0 + rnd(i * 3.1) * 340, y = -92 + rnd(i * 5.7) * 76; L([[x, y], [x + 3 + rnd(i) * 5, y]], "rgba(127,200,216,.18)", 0.25); }
-  R(WB.x0, -95, 340, 9, "#1A2A1C");
+  R(WB.x0, WB.y0, WB.x1 - WB.x0, WB.y0 * -1 - 14, "#0E3540");
+  for (let i = 0; i < 420; i++) { const x = WB.x0 + rnd(i * 3.1) * (WB.x1 - WB.x0), y = -92 + rnd(i * 5.7) * 76; L([[x, y], [x + 3 + rnd(i) * 5, y]], "rgba(127,200,216,.18)", 0.25); }
+  R(WB.x0, -102, WB.x1 - WB.x0, 9, "#1A2A1C");
   // дорога промпарка на севере
-  R(WB.x0, 152, 340, 11, "#24272B"); L([[WB.x0, 157.5], [WB.x1, 157.5]], "#C9B458", 0.25, [3, 3]);
+  R(WB.x0, 152, WB.x1 - WB.x0, 11, "#24272B"); L([[WB.x0, 157.5], [WB.x1, 157.5]], "#C9B458", 0.25, [3, 3]);
   // участок: бетон, проезды, забор
   R(0, -12, 200, 162, "#2B2E32"); R(6, -12, 122, 12, "#3A3E44");
   [[58, 0, 14, 150], [132, 0, 8, 150], [0, 48, 200, 8], [0, 100, 200, 6], [20, 142, 180, 8]].forEach(([x, y, w, d]) => R(x, y, w, d, "#222428"));
@@ -347,6 +352,10 @@ const up = e => { if (ptr.size === 1 && moved < 6) pick(e.offsetX, e.offsetY); p
 cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", e => { ptr.delete(e.pointerId); cv.classList.remove("drag"); });
 cv.addEventListener("wheel", e => { e.preventDefault(); zoomAt(Math.exp(-e.deltaY * 0.0015), e.offsetX, e.offsetY); }, { passive: false });
 $("zIn").onclick = () => zoomAt(1.4, W / 2, H / 2); $("zOut").onclick = () => zoomAt(1 / 1.4, W / 2, H / 2); $("zAll").onclick = fitAll;
+// во весь экран: только где браузер это умеет (на iPhone кнопки нет)
+if (!box.requestFullscreen) $("zFull").hidden = true;
+$("zFull").onclick = () => { (document.fullscreenElement ? document.exitFullscreen() : box.requestFullscreen()).catch(() => {}); };
+document.addEventListener("fullscreenchange", () => { resize(); fitAll(); });
 
 // ---------- карточка здания по нажатию
 let cardId = null;
@@ -525,7 +534,7 @@ function frame() {
       label(x, y, t.toUpperCase(), big ? 11 : 13, c); });
   if (k > 3.6) {
     carbs.forEach(([x0, y], i) => tag(x0 + 17.5, y + 3.4, `${temp(530, 22, i)} °C`, "#FF8A4C"));
-    [61, 68, 75, 82, 89, 96].forEach((y, i) => tag(163, y + 3.1, S.maint && i === S.mk ? `№${i + 1} · ОСМОТР` : `№${i + 1} · ${temp(935, 18, i + 9)} °C · 210 кг/ч`, S.maint && i === S.mk ? "#F2C14E" : "#FF8A4C"));
+    [61, 68, 75, 82, 89, 96].forEach((y, i) => tag(163, y - 3.1, S.maint && i === S.mk ? `№${i + 1} · ОСМОТР` : `№${i + 1} · ${temp(935, 18, i + 9)} °C · 210 кг/ч`, S.maint && i === S.mk ? "#F2C14E" : "#FF8A4C"));
     tag(151, 27.2, `пар ${fmt(temp(118, 3, 4) / 10, 1)} бар`, "#7FC8D8");
   } else {
     const sm = k < 2.4;
@@ -557,6 +566,7 @@ const DOW = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"], MON = ["я
 function panels(S, ms) {
   const t = new Date(ms + TZ);
   $("cTime").textContent = [t.getUTCHours(), t.getUTCMinutes(), t.getUTCSeconds()].map(v => String(v).padStart(2, "0")).join(":");
+  $("mclock").textContent = $("cTime").textContent.slice(0, 5) + (speed > 1 ? "  ×" + speed : "");
   $("cDate").textContent = `${DOW[t.getUTCDay()]}, ${t.getUTCDate()} ${MON[t.getUTCMonth()]} · Вьетнам`;
   $("tAC").textContent = fmt(S.ac, 1); $("tBags").textContent = fmt(Math.floor(S.ac / 0.5)); $("tShell").textContent = fmt(S.shell);
   $("tCubes").textContent = fmt(S.cubes, 1); $("tCont").textContent = fmt(S.cont + S.contB1); $("tRev").textContent = "$" + fmt(S.rev);
