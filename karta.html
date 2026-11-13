@@ -106,6 +106,7 @@ aside { display:flex; flex-direction:column; gap:14px; min-width:0; }
 .prow .st .pill { font-size:11px; padding:0 6px; }
 .prow .st .tm { font-family:var(--mono); color:var(--muted); font-size:11px; }
 .pill.off { color:var(--muted); }
+.prow[hidden], .pgrp[hidden] { display:none; }
 .charts { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:14px; }
 @media (max-width: 1400px) { .charts { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
 .chart { height:170px; width:100%; display:block; }
@@ -300,13 +301,21 @@ const OFFICE_ROLES = ["директор фабрики", "главный инж�
 const AREAS = ["Блок 1", "Активированный уголь", "Брикеты барбекю", "Уксус", "Службы", "Офис"];
 const areaOf = r => /брикет/.test(r) ? 2 : /уксус/.test(r) ? 3 : /Б1|мельница|кубик|^упаковка$/.test(r) ? 0 : /ОТК|весовая|охрана ворот|мастерская|электрик|подстанция|начальник|ремонтник/.test(r) ? 4 : 1;
 const SURN = ["Нгуен", "Чан", "Ле", "Фам", "Хоанг", "Фан", "Ву", "Данг", "Буй", "До", "Хо", "Нго", "Зыонг", "Ли"];
-// 148 человек: 3 смены × (посты + обходы) и офис; у каждого постоянные имя, смена и пост
+// штат: всего 20 человек — 3 смены по 6 (каждый ведёт свой участок) и 2 в офисе; [пост или маршрут, должность, участок]
+const STAFF = {
+  posts: [[0, "оператор Блока 1: карбонизация и уксус", 0], [3, "кубики: пресс, сушка, упаковка", 0], [17, "печи активации 1–6", 1],
+    [21, "фасовка и склад АУ", 1], [34, "брикеты барбекю", 2]],
+  walks: [[0, "обходчик карбонизации АУ, 4 линии", 1]],
+  office: [[0, "директор фабрики"], [2, "бухгалтер и ОТК"]],
+};
+const CREW_N = STAFF.posts.length + STAFF.walks.length, OFFICE_N = STAFF.office.length;
+// у каждого постоянные имя, смена и пост
 const ROSTER = (() => {
   const pairs = []; NAMES.forEach((g, i) => SURN.forEach((f, j) => pairs.push([f, g, rnd(i * 31.7 + j * 7.3)])));
   pairs.sort((a, b) => a[2] - b[2]); let n = 0; const R = [];
-  const add = (crew, kind, slot, role) => { const [f, g] = pairs[n++]; R.push({ id: R.length, crew, kind, slot, role, area: crew === 3 ? 5 : areaOf(role), given: g, name: f + " " + g }); };
-  for (let c = 0; c < 3; c++) { POSTS.forEach(([, , r], i) => add(c, "post", i, r)); WALKS.forEach((_, i) => add(c, "walk", i, WALK_ROLES[i])); }
-  OFFICE_ROLES.forEach((r, i) => add(3, "office", i, r));
+  const add = (crew, kind, slot, role, area) => { const [f, g] = pairs[n++]; R.push({ id: R.length, crew, kind, slot, role, area, given: g, name: f + " " + g }); };
+  for (let c = 0; c < 3; c++) { STAFF.posts.forEach(([i, r, a]) => add(c, "post", i, r, a)); STAFF.walks.forEach(([i, r, a]) => add(c, "walk", i, r, a)); }
+  STAFF.office.forEach(([i, r]) => add(3, "office", i, r, 5));
   return R;
 })();
 const weekday = d => new Date(d * DAY).getUTCDay();
@@ -563,7 +572,7 @@ function state(ms) {
 // ---------- журнал: события суток до текущей минуты
 function events(S) {
   const E = [], d = S.d;
-  const n0 = POSTS.length + WALKS.length; SHIFTS.forEach(([n, a], i) => E.push([a % 24, `Смена ${n} заступила: ${n0} ${plural(n0, "человек", "человека", "человек")} в цехах${i === 0 ? `, ${OFFICE.length} в офисе с 08:00` : ""}`, i]));
+  const n0 = CREW_N; SHIFTS.forEach(([n, a], i) => E.push([a % 24, `Смена ${n} заступила: ${n0} ${plural(n0, "человек", "человека", "человек")} в цехах${i === 0 ? `, ${OFFICE_N} в офисе с 08:00` : ""}`, i]));
   BARGES.forEach(b => { const q = bargeState(b, 0, d), dock = b.to === "au" ? "причалу АУ" : "причалу Блока 1";
     E.push([b.t0, `Баржа «${b.name}» идёт к ${dock}`]); E.push([b.t0 + B_IN, `«${b.name}» у причала, кран начал разгрузку`]);
     E.push([b.t0 + B_IN + B_UNLOAD, `Принято ${fmt(q.tons)} т скорлупы с «${b.name}», навес пополнен`]); });
@@ -792,7 +801,7 @@ function panels(S, ms) {
   $("tBbq").textContent = fmt(S.bbq, 1); $("tVin").textContent = fmt(S.vin, 1); $("tVinS").textContent = `т уксуса, из них ${fmt(S.ref, 1)} т очищенного`; $("tRev").textContent = "$" + fmt(S.rev);
   $("tEb").textContent = "$" + fmt(S.ebitda); $("tEbS").textContent = `EBITDA за сутки · ${S.rev ? Math.round(S.ebitda / S.rev * 100) : 0}% выручки`;
   const [n, a, b] = SHIFTS[S.sh]; $("shName").textContent = `${n} · ${hhmm(a)}–${hhmm(b)}`;
-  $("shPeople").textContent = `${POSTS.length + WALKS.length} в цехах` + (officeOpen(S) ? ` + ${OFFICE.length} в офисе` : "");
+  $("shPeople").textContent = `${CREW_N} в цехах` + (officeOpen(S) ? ` + ${OFFICE_N} в офисе` : "");
   $("shAct").textContent = S.maint ? `5 из 6 · печь №${S.mk + 1} на осмотре` : "6 из 6 · 850–1 000 °C";
   $("shAct").className = "pill " + (S.maint ? "warn" : "hot");
   const bq = S.barges.find(q => q.on);
@@ -826,7 +835,7 @@ function chart(id, key, nominal, color, S) {
 $("foot").textContent = `Нормы из финмодели проекта: активированный уголь ${fmt(D.acDay * 365)} т/год (≈${fmt(D.acDay, 1)} т в сутки, по $${fmt(D.priceAC)}/т), ` +
   `кальянные кубики ${D.cubeMonth} т/мес (по $${fmt(D.priceCube)}/т), древесный уксус ${D.cubeMonth} т/мес (по $${fmt(D.priceWv)}/т, из них ${D.refMonth} т очищенного по $${fmt(D.priceRef)}/т), ` +
   `брикеты барбекю ${fmt(D.bbqMonth)} т/мес (по $${fmt(D.priceBbq)}/т); за год выручка $${fmt(D.revYear / 1e6, 2)} млн и EBITDA $${fmt(D.ebYear / 1e6, 1)} млн — как в финмодели на 2029 год. Скорлупа с барж ≈${fmt(D.shellAU + D.shellB1)} т в сутки (по $${fmt(D.priceShell)}/т с доставкой). ` +
-  `Сутки отличаются от нормы на ±7%. Имена рабочих, названия барж и номера фур вымышлены; 47 человек в каждой из трёх смен — посты с карты, часы считаются по графику смен. Планировка — 3D-эскиз генплана, оборудование — эскиз до проекта.`;
+  `Сутки отличаются от нормы на ±7%. Имена рабочих, названия барж и номера фур вымышлены; всего 20 человек: 3 смены по 6 и 2 в офисе, часы считаются по графику смен. Планировка — 3D-эскиз генплана, оборудование — эскиз до проекта.`;
 
 // значок-фигурка для строки списка: каска цвета смены и жилет; у офиса — белая рубашка
 const avatar = p => { const off = p.crew === 3, hat = off ? "#2A2420" : SHIFT_HAT[p.crew], vest = off ? "#F4F2EC" : "#F07C2A";
@@ -856,7 +865,7 @@ function peoplePanel(S) {
     pill.textContent = dutyText(p, S); pill.className = "pill " + (duty ? "ok" : "off");
     r.querySelector(".tm").textContent = `${duty ? "на смене " + hm(sinceStart(p, S)) : "сегодня " + hm(t.today)} · ${MONTH} ${fmt(Math.floor(t.month))} ч`; });
   AREAS.forEach((_, ai) => { const all = ROSTER.filter(p => p.area === ai), n = all.filter(p => onDuty(p, S)).length;
-    pGrps[ai].hidden = pMode === "now" && !n; pGrps[ai].lastChild.textContent = pMode === "now" ? `на смене ${n}` : `на смене ${n} из ${all.length}`; });
+    pGrps[ai].hidden = !all.length || (pMode === "now" && !n); pGrps[ai].lastChild.textContent = pMode === "now" ? `на смене ${n}` : `на смене ${n} из ${all.length}`; });
   if (cardId && cardId.startsWith("p:")) { const p = ROSTER[selP], t = hoursOf(p, S);
     $("cP").textContent = `${dutyText(p, S)[0].toUpperCase() + dutyText(p, S).slice(1)}. ${onDuty(p, S) ? `На этой смене ${hm(sinceStart(p, S))}` : `Сегодня отработал ${hm(t.today)}`}, с начала месяца — ${fmt(Math.floor(t.month))} ч.`; }
 }
