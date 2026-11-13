@@ -82,6 +82,30 @@ aside { display:flex; flex-direction:column; gap:14px; min-width:0; }
 #log li { display:grid; grid-template-columns:48px 1fr; gap:8px; padding:5px 14px; font-size:12.5px; line-height:1.4; border-bottom:1px solid rgba(255,255,255,.04); }
 #log li time { font-family:var(--mono); color:var(--gold); font-size:12px; }
 #log li.new { background:rgba(240,147,90,.12); }
+.people h2 .onb { color:var(--leaf); font-weight:600; letter-spacing:.1em; }
+.psum { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); border-bottom:1px solid var(--line); }
+.psum div { padding:8px 12px; border-right:1px solid var(--line); min-width:0; }
+.psum div:last-child { border-right:0; }
+.psum b { display:block; font-family:var(--display); font-size:22px; font-weight:600; font-variant-numeric:tabular-nums; line-height:1.1; }
+.psum span { font-size:11.5px; color:var(--muted); }
+.pfilt { display:flex; gap:6px; padding:8px 12px; border-bottom:1px solid var(--line); }
+.pfilt .btn { font-size:12px; min-height:30px; padding:2px 10px; }
+.plist { max-height:430px; overflow-y:auto; }
+.pgrp { position:sticky; top:0; z-index:1; display:flex; justify-content:space-between; gap:8px; padding:5px 12px; background:var(--raise);
+  font-family:var(--display); font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--line); }
+.prow { display:grid; grid-template-columns:28px minmax(0, 1fr); gap:3px 10px; align-items:start; width:100%; padding:7px 12px; text-align:left;
+  background:none; color:inherit; border:0; border-bottom:1px solid var(--line); cursor:pointer; font:inherit; }
+.prow:hover { background:var(--raise); }
+.prow.sel { background:var(--raise); box-shadow:inset 3px 0 0 var(--gold); }
+.prow:focus-visible { outline:2px solid var(--gold); outline-offset:-2px; }
+.prow svg { display:block; }
+.prow .nm { margin-right:6px; font-family:var(--display); font-size:15px; font-weight:600; line-height:1.15; overflow-wrap:anywhere; }
+.prow .rl { display:block; font-size:12px; color:var(--muted); line-height:1.3; }
+.prow svg { grid-row:1 / span 2; margin-top:2px; }
+.prow .st { grid-column:2; display:flex; flex-wrap:wrap; align-items:center; gap:2px 10px; font-size:11.5px; line-height:1.35; }
+.prow .st .pill { font-size:11px; padding:0 6px; }
+.prow .st .tm { font-family:var(--mono); color:var(--muted); font-size:11px; }
+.pill.off { color:var(--muted); }
 .charts { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:14px; }
 @media (max-width: 1400px) { .charts { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
 .chart { height:170px; width:100%; display:block; }
@@ -147,6 +171,11 @@ body.light .clock i { color:var(--ember); }
           <div class="tile hi"><b id="tRev">$0</b><span>выручка за сутки</span></div>
           <div class="tile hi wide"><b id="tEb">$0</b><span id="tEbS">EBITDA за сутки</span></div>
         </div>
+      </section>
+      <section class="panel people"><h2>Люди на фабрике <span class="onb" id="pOn">на смене: 0</span></h2>
+        <div class="psum"><div><b id="pWork">0</b><span>в цехах</span></div><div><b id="pOff">0</b><span>в офисе</span></div><div><b id="pAll">0</b><span>в списке, 3 смены и офис</span></div></div>
+        <div class="pfilt"><button class="btn on" id="pfNow">Сейчас на смене</button><button class="btn" id="pfAll">Все</button></div>
+        <div class="plist" id="plist"></div>
       </section>
       <section class="panel"><h2>Смена <span id="shName">—</span></h2>
         <div class="shift">
@@ -265,6 +294,45 @@ const WALKS = [[[80, 66.5], [110, 66.5]], [[110, 84.5], [80, 84.5]], [[148, 64.5
   [[14, 103.5], [48, 103.5]], [[156, 114], [184, 114]], [[74, 135.2], [87, 135.2]], [[110, 115], [130, 115]]];
 const OFFICE = [[75.2, 132.6], [78.7, 132.6], [82.2, 132.6], [85.7, 132.6], [75.2, 138.2], [78.7, 138.2], [82.2, 138.2]];
 const SHIFT_HAT = ["#F2C14E", "#F0935A", "#7FC8D8"];
+const WALK_ROLES = ["обходчик карбонизации", "обходчик карбонизации", "обходчик печей активации", "обходчик печей активации", "обходчик печей активации",
+  "мастер смены Б1", "кладовщик склада АУ", "начальник смены", "дежурный ремонтник"];
+const OFFICE_ROLES = ["директор фабрики", "главный инженер", "бухгалтер", "менеджер по продажам", "логист", "закупка скорлупы", "кадры и охрана труда"];
+const AREAS = ["Блок 1", "Активированный уголь", "Брикеты барбекю", "Уксус", "Службы", "Офис"];
+const areaOf = r => /брикет/.test(r) ? 2 : /уксус/.test(r) ? 3 : /Б1|мельница|кубик|^упаковка$/.test(r) ? 0 : /ОТК|весовая|охрана ворот|мастерская|электрик|подстанция|начальник|ремонтник/.test(r) ? 4 : 1;
+const SURN = ["Нгуен", "Чан", "Ле", "Фам", "Хоанг", "Фан", "Ву", "Данг", "Буй", "До", "Хо", "Нго", "Зыонг", "Ли"];
+// 148 человек: 3 смены × (посты + обходы) и офис; у каждого постоянные имя, смена и пост
+const ROSTER = (() => {
+  const pairs = []; NAMES.forEach((g, i) => SURN.forEach((f, j) => pairs.push([f, g, rnd(i * 31.7 + j * 7.3)])));
+  pairs.sort((a, b) => a[2] - b[2]); let n = 0; const R = [];
+  const add = (crew, kind, slot, role) => { const [f, g] = pairs[n++]; R.push({ id: R.length, crew, kind, slot, role, area: crew === 3 ? 5 : areaOf(role), given: g, name: f + " " + g }); };
+  for (let c = 0; c < 3; c++) { POSTS.forEach(([, , r], i) => add(c, "post", i, r)); WALKS.forEach((_, i) => add(c, "walk", i, WALK_ROLES[i])); }
+  OFFICE_ROLES.forEach((r, i) => add(3, "office", i, r));
+  return R;
+})();
+const weekday = d => new Date(d * DAY).getUTCDay();
+const officeOpen = S => weekday(S.d) !== 0 && S.h >= 8 && S.h < 17;          // офис пн–сб 08:00–17:00
+const onDuty = (p, S) => p.crew === 3 ? officeOpen(S) : p.crew === S.sh;
+// сколько часов человек отработал сегодня (с 00:00) и с начала месяца
+function hoursOf(p, S) {
+  const h = S.h, t = new Date(S.d * DAY), dom = t.getUTCDate();
+  if (p.crew === 3) { const today = weekday(S.d) === 0 ? 0 : clamp(h - 8, 0, 4) + clamp(h - 13, 0, 4);    // обед 12–13
+    let days = 0; for (let i = 1; i < dom; i++) if (weekday(S.d - i) !== 0) days++;
+    return { today, month: days * 8 + today }; }
+  const today = p.crew === 0 ? clamp(h - 6, 0, 8) : p.crew === 1 ? clamp(h - 14, 0, 8) : clamp(h, 0, 6) + clamp(h - 22, 0, 2);
+  return { today, month: (dom - 1) * 8 + today };
+}
+function dutyText(p, S) {
+  const h = S.h;
+  if (p.crew === 3) return weekday(S.d) === 0 ? "выходной" : officeOpen(S) ? "на месте с 08:00" : h < 8 ? "придёт в 08:00" : "день закрыт в 17:00";
+  const [, a, b] = SHIFTS[p.crew];
+  if (p.crew === S.sh) return `смена открыта ${hhmm(a)}`;
+  if (p.crew === 0) return h >= 14 ? "смена закрыта в 14:00" : "заступит в 06:00";
+  if (p.crew === 1) return h >= 22 ? "смена закрыта в 22:00" : "заступит в 14:00";
+  return "заступит в 22:00";
+}
+// сколько идёт текущая смена (для тех, кто на смене)
+const sinceStart = (p, S) => p.crew === 3 ? clamp(S.h - 8, 0, 4) + clamp(S.h - 13, 0, 4) : (S.h - SHIFTS[p.crew][1] + 24) % 24;
+const hm = x => { const m = Math.round(x * 60); return m < 60 ? `${m} мин` : `${Math.floor(m / 60)} ч ${String(m % 60).padStart(2, "0")} мин`; };
 
 // ---------- геометрия карты (метры: x — восток, y — север; участок 200 × 150 м, река на юге)
 const WB = { x0: -240, x1: 440, y0: -110, y1: 200 };
@@ -447,14 +515,27 @@ let cardId = null;
 const NAMES_EXTRA = { villa: [108, 132.5, 14, 8], wharf: [6, -12, 122, 12] };
 function pick(px, py) {
   const x = wx(px), y = wy(py);
+  { const u = clamp(k * 0.42, 2.4, 9); let best = null, bd = 1e9;      // человек: от ног до каски
+    NOW_P.forEach(q => { const dx = px - sx(q.x), dy = py - (sy(q.y) - u * 3); const dd = Math.hypot(dx / (u * 2), dy / (u * 3.6)); if (dd < 1 && dd < bd) { bd = dd; best = q; } });
+    if (best) { selectPerson(best.p.id, false); return; } }
   let hit = Object.entries(NAMES_EXTRA).find(([, r]) => x >= r[0] && x <= r[0] + r[2] && y >= r[1] && y <= r[1] + r[3]);
   let id = hit && hit[0];
   if (!id) { const o = D.scene.find(o => o.w && x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.d); id = o && o.id; }
+  selP = null; markRow();
   if (!id || !D.info[id]) { $("card").hidden = true; cardId = null; return; }
   const [t, z, a, p] = D.info[id]; cardId = id;
   $("cT").textContent = t; $("cZ").textContent = z; $("cA").textContent = a; $("cP").textContent = p; $("card").hidden = false;
 }
-$("cardX").onclick = () => { $("card").hidden = true; cardId = null; };
+$("cardX").onclick = () => { $("card").hidden = true; cardId = null; selP = null; markRow(); };
+function selectPerson(id, fly) {
+  const p = ROSTER[id]; selP = id; cardId = "p:" + id; markRow();
+  $("cZ").textContent = p.crew === 3 ? "Офис · пн–сб 08:00–17:00" : `Смена ${SHIFTS[p.crew][0]} · ${hhmm(SHIFTS[p.crew][1])}–${hhmm(SHIFTS[p.crew][2])} · ${AREAS[p.area]}`;
+  $("cT").textContent = p.name; $("cA").textContent = p.role; $("cP").textContent = ""; $("card").hidden = false;
+  if (fly) { const q = NOW_P.find(q => q.p.id === id); if (q) { k = Math.max(k, 11); cx = q.x; cy = q.y + 2; } }
+  if (LAST_S) { lastPeople = ""; peoplePanel(LAST_S); }
+  const row = document.querySelector(`.prow[data-id="${id}"]`); if (row && !fly) row.scrollIntoView({ block: "nearest" });
+}
+function markRow() { document.querySelectorAll(".prow").forEach(r => r.classList.toggle("sel", +r.dataset.id === selP)); }
 
 // ---------- состояние фабрики на момент времени
 function state(ms) {
@@ -482,7 +563,7 @@ function state(ms) {
 // ---------- журнал: события суток до текущей минуты
 function events(S) {
   const E = [], d = S.d;
-  const n0 = POSTS.length + WALKS.length; SHIFTS.forEach(([n, a], i) => E.push([a % 24, `Смена ${n} заступила: ${n0} ${plural(n0, "человек", "человека", "человек")} в цехах${i === 0 ? `, ${OFFICE.length} в офисе с 07:30` : ""}`, i]));
+  const n0 = POSTS.length + WALKS.length; SHIFTS.forEach(([n, a], i) => E.push([a % 24, `Смена ${n} заступила: ${n0} ${plural(n0, "человек", "человека", "человек")} в цехах${i === 0 ? `, ${OFFICE.length} в офисе с 08:00` : ""}`, i]));
   BARGES.forEach(b => { const q = bargeState(b, 0, d), dock = b.to === "au" ? "причалу АУ" : "причалу Блока 1";
     E.push([b.t0, `Баржа «${b.name}» идёт к ${dock}`]); E.push([b.t0 + B_IN, `«${b.name}» у причала, кран начал разгрузку`]);
     E.push([b.t0 + B_IN + B_UNLOAD, `Принято ${fmt(q.tons)} т скорлупы с «${b.name}», навес пополнен`]); });
@@ -524,6 +605,28 @@ const wrect = (x, y, w, d, c) => { ctx.fillStyle = c; ctx.fillRect(sx(x), sy(y +
 function person(x, y, hat) { const r = Math.max(3, 0.75 * k); ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.beginPath(); ctx.arc(sx(x) + 1.5, sy(y) + 1.5, r, 0, 7); ctx.fill();
   ctx.fillStyle = "#2E6FB0"; ctx.beginPath(); ctx.ellipse(sx(x), sy(y), r, r * 0.72, 0, 0, 7); ctx.fill();
   ctx.fillStyle = hat; ctx.beginPath(); ctx.arc(sx(x), sy(y), r * 0.55, 0, 7); ctx.fill(); }
+function figure(x, y, o) {
+  const u = clamp(k * 0.42, 2.4, 9), X = sx(x), Y = sy(y), step = o.walk ? Math.sin(anim * 9 + o.ph) : 0;
+  ctx.fillStyle = "rgba(0,0,0,.28)"; ctx.beginPath(); ctx.ellipse(X, Y, u * 1.5, u * 0.55, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = "#2B3440"; ctx.fillRect(X - u * 0.95 + step * u * 0.35, Y - u * 2, u * 0.8, u * 2); ctx.fillRect(X + u * 0.15 - step * u * 0.35, Y - u * 2, u * 0.8, u * 2);
+  ctx.fillStyle = o.shirt; ctx.fillRect(X - u * 1.55, Y - u * 4.3, u * 0.55, u * 1.9); ctx.fillRect(X + u, Y - u * 4.3, u * 0.55, u * 1.9);
+  ctx.fillStyle = o.vest; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(X - u * 1.05, Y - u * 4.5, u * 2.1, u * 2.7, u * 0.4) : ctx.rect(X - u * 1.05, Y - u * 4.5, u * 2.1, u * 2.7); ctx.fill();
+  if (o.stripe) { ctx.fillStyle = "#E9EEF2"; ctx.fillRect(X - u * 1.05, Y - u * 3.3, u * 2.1, u * 0.38); }
+  ctx.fillStyle = "#D9A77E"; ctx.beginPath(); ctx.arc(X, Y - u * 5.25, u * 0.78, 0, 7); ctx.fill();
+  if (o.hat) { ctx.fillStyle = o.hat; ctx.beginPath(); ctx.arc(X, Y - u * 5.45, u * 0.85, Math.PI, 0); ctx.fill(); ctx.fillRect(X - u * 1.15, Y - u * 5.5, u * 2.3, u * 0.32); }
+  else { ctx.fillStyle = "#2A2420"; ctx.beginPath(); ctx.arc(X, Y - u * 5.45, u * 0.8, Math.PI, 0); ctx.fill(); }
+  if (o.sel) { ctx.strokeStyle = "#F2C14E"; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(X, Y, u * 2.6 + 2 * Math.sin(anim * 5), u * 1.1 + Math.sin(anim * 5), 0, 0, 7); ctx.stroke(); }
+  if (o.name) { ctx.font = `600 ${o.sel ? 13 : 11}px Oswald, "Arial Narrow", sans-serif`; const w = ctx.measureText(o.name).width + 8, ty = Y - u * 6.5 - 8;
+    ctx.fillStyle = o.sel ? "#F2C14E" : "rgba(17,20,24,.82)"; ctx.fillRect(X - w / 2, ty - 8, w, 15);
+    ctx.fillStyle = o.sel ? "#141414" : "#F4F1E8"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(o.name, X, ty); }
+}
+// где сейчас человек (посты слегка покачиваются, обходчики ходят по маршруту)
+function personAt(p) {
+  if (p.kind === "office") { const [x, y] = OFFICE[p.slot]; return { x, y, walk: false }; }
+  if (p.kind === "walk") { const v = shuttle(WALKS[p.slot], 26 + p.slot * 3, p.slot * 0.17); return { x: v.x, y: v.y, walk: true }; }
+  const [x, y] = POSTS[p.slot], i = p.slot; return { x: x + 0.4 * Math.sin(anim * 0.7 + i * 2.1), y: y + 0.3 * Math.cos(anim * 0.5 + i), walk: false };
+}
+let selP = null, NOW_P = [];
 const wcirc = (x, y, r, c) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(sx(x), sy(y), Math.max(1.2, r * k), 0, 7); ctx.fill(); };
 function vehicle(x, y, a, len, wid, body, cab, load) {
   ctx.save(); ctx.translate(sx(x), sy(y)); ctx.rotate(-a);
@@ -620,12 +723,11 @@ function frame() {
     vehicle(dir > 0 ? x : 280 - x - 80, dir > 0 ? 155.4 : 159.6, dir > 0 ? 0 : Math.PI, i % 3 ? 4.4 : 10, 1.9, ["#C0392B", "#E8EDF2", "#2F6FC4", "#7F8C8D", "#E8B92E", "#1E8449"][i], null, null); }
 
   // люди текущей смены (каска — цвет смены), имена при приближении
-  const hat = SHIFT_HAT[S.sh], base = S.sh * POSTS.length;
-  POSTS.forEach(([x, y, role], i) => { const jx = 0.4 * Math.sin(anim * 0.7 + i * 2.1), jy = 0.3 * Math.cos(anim * 0.5 + i);
-    person(x + jx, y + jy, hat);
-    if (k > 5.5) label(x + jx, y + jy + 1.6, NAMES[(base + i * 7 + S.d) % NAMES.length], 11, "#EEEAE0"); });
-  WALKS.forEach((P, i) => { const v = shuttle(P, 26 + i * 3, i * 0.17); person(v.x, v.y, hat); });
-  if (S.h > 7.5 && S.h < 18) OFFICE.forEach(([x, y]) => person(x, y, "#E8E2D4"));
+  NOW_P = ROSTER.filter(p => onDuty(p, S)).map(p => Object.assign({ p }, personAt(p))).sort((a, b) => b.y - a.y);
+  const names = k > 4.6;
+  NOW_P.forEach(q => { const off = q.p.crew === 3, sel = selP === q.p.id;
+    figure(q.x, q.y, { walk: q.walk, ph: q.p.id, shirt: off ? "#F4F2EC" : "#2E6FB0", vest: off ? "#F4F2EC" : "#F07C2A", stripe: !off, hat: off ? null : SHIFT_HAT[q.p.crew], sel,
+      name: names || sel ? q.p.given : null }); });
 
   // ночь: темнее, фонари и окна светятся
   if (NIGHT && night > 0) {
@@ -690,7 +792,7 @@ function panels(S, ms) {
   $("tBbq").textContent = fmt(S.bbq, 1); $("tVin").textContent = fmt(S.vin, 1); $("tVinS").textContent = `т уксуса, из них ${fmt(S.ref, 1)} т очищенного`; $("tRev").textContent = "$" + fmt(S.rev);
   $("tEb").textContent = "$" + fmt(S.ebitda); $("tEbS").textContent = `EBITDA за сутки · ${S.rev ? Math.round(S.ebitda / S.rev * 100) : 0}% выручки`;
   const [n, a, b] = SHIFTS[S.sh]; $("shName").textContent = `${n} · ${hhmm(a)}–${hhmm(b)}`;
-  $("shPeople").textContent = (n => `${n} в цехах` + (S.h > 7.5 && S.h < 18 ? ` + ${OFFICE.length} в офисе` : ""))(POSTS.length + WALKS.length);
+  $("shPeople").textContent = `${POSTS.length + WALKS.length} в цехах` + (officeOpen(S) ? ` + ${OFFICE.length} в офисе` : "");
   $("shAct").textContent = S.maint ? `5 из 6 · печь №${S.mk + 1} на осмотре` : "6 из 6 · 850–1 000 °C";
   $("shAct").className = "pill " + (S.maint ? "warn" : "hot");
   const bq = S.barges.find(q => q.on);
@@ -698,12 +800,12 @@ function panels(S, ms) {
   $("shWharf").className = "pill " + (bq ? "ok" : "");
   $("shTank").textContent = `заполнены на ${Math.round(S.tankK * 100)}%`;
   $("shStock").textContent = `${fmt(Math.max(0, S.stockBags))} биг-бэгов · ${fmt(Math.max(0, S.stockBags) / 2)} т`;
-  if (cardId) { const L = { act: S.maint ? `Сейчас: 5 печей в работе, №${S.mk + 1} на осмотре` : "Сейчас: 6 печей в работе, ≈1 260 кг/ч",
+  if (cardId && !cardId.startsWith("p:")) { const L = { act: S.maint ? `Сейчас: 5 печей в работе, №${S.mk + 1} на осмотре` : "Сейчас: 6 печей в работе, ≈1 260 кг/ч",
     carb: "Сейчас: 4 линии в работе", bbq: `Сегодня: ${fmt(S.bbq, 1)} т брикетов, на поддонах ${fmt(Math.max(0, S.bbqStock), 1)} т`,
     tanks: `Резервуары заполнены на ${Math.round(S.tankK * 100)}%, сегодня ${fmt(S.vin, 1)} т уксуса-сырца`, purif: `Сегодня очищено ${fmt(S.ref, 1)} т уксуса`, hall_b1: `Сейчас: ${fmt(S.cubes, 1)} т кубиков с начала суток`, pack_au: `На складе: ${fmt(Math.max(0, S.stockBags))} биг-бэгов`,
     wharf: $("shWharf").textContent, shed_au: `Принято сегодня: ${fmt(S.shell)} т`, office: "ОТК: йодное число ≥1 000 мг/г" }[cardId];
     $("cL").textContent = L || ""; }
-  renderLog(S);
+  peoplePanel(S); renderLog(S);
 }
 function chart(id, key, nominal, color, S) {
   const c = $(id), w = c.clientWidth, h = c.clientHeight, d = Math.min(2, devicePixelRatio || 1);
@@ -724,7 +826,40 @@ function chart(id, key, nominal, color, S) {
 $("foot").textContent = `Нормы из финмодели проекта: активированный уголь ${fmt(D.acDay * 365)} т/год (≈${fmt(D.acDay, 1)} т в сутки, по $${fmt(D.priceAC)}/т), ` +
   `кальянные кубики ${D.cubeMonth} т/мес (по $${fmt(D.priceCube)}/т), древесный уксус ${D.cubeMonth} т/мес (по $${fmt(D.priceWv)}/т, из них ${D.refMonth} т очищенного по $${fmt(D.priceRef)}/т), ` +
   `брикеты барбекю ${fmt(D.bbqMonth)} т/мес (по $${fmt(D.priceBbq)}/т); за год выручка $${fmt(D.revYear / 1e6, 2)} млн и EBITDA $${fmt(D.ebYear / 1e6, 1)} млн — как в финмодели на 2029 год. Скорлупа с барж ≈${fmt(D.shellAU + D.shellB1)} т в сутки (по $${fmt(D.priceShell)}/т с доставкой). ` +
-  `Сутки отличаются от нормы на ±7%. Имена рабочих, названия барж и номера фур вымышлены. Планировка — 3D-эскиз генплана, оборудование — эскиз до проекта.`;
+  `Сутки отличаются от нормы на ±7%. Имена рабочих, названия барж и номера фур вымышлены; 47 человек в каждой из трёх смен — посты с карты, часы считаются по графику смен. Планировка — 3D-эскиз генплана, оборудование — эскиз до проекта.`;
+
+// значок-фигурка для строки списка: каска цвета смены и жилет; у офиса — белая рубашка
+const avatar = p => { const off = p.crew === 3, hat = off ? "#2A2420" : SHIFT_HAT[p.crew], vest = off ? "#F4F2EC" : "#F07C2A";
+  return `<svg width="26" height="30" viewBox="0 0 20 24" aria-hidden="true"><rect x="6.3" y="18.5" width="3" height="5" fill="#2B3440"/><rect x="10.7" y="18.5" width="3" height="5" fill="#2B3440"/>` +
+    `<rect x="4.6" y="10.5" width="10.8" height="8.6" rx="2" fill="${vest}" stroke="rgba(0,0,0,.25)" stroke-width=".6"/>` + (off ? "" : `<rect x="4.6" y="14" width="10.8" height="1.4" fill="#E9EEF2"/>`) +
+    `<circle cx="10" cy="7" r="3.6" fill="#D9A77E"/><path d="M5.6 6.4a4.4 4.4 0 0 1 8.8 0z" fill="${hat}"/>` + (off ? "" : `<rect x="4.4" y="5.8" width="11.2" height="1.3" fill="${hat}"/>`) + `</svg>`; };
+let pMode = "now";
+const pRows = ROSTER.map(p => { const b = document.createElement("button"); b.className = "prow"; b.dataset.id = p.id;
+  b.innerHTML = `${avatar(p)}<span><span class="nm">${p.name}</span><span class="rl">${p.role} · ${p.crew === 3 ? "офис" : "смена " + SHIFTS[p.crew][0]}</span></span><span class="st"><span class="pill"></span><span class="tm"></span></span>`;
+  b.addEventListener("click", () => selectPerson(p.id, true)); return b; });
+const pGrps = AREAS.map(a => { const h = document.createElement("div"); h.className = "pgrp"; h.innerHTML = `<span>${a}</span><span></span>`; return h; });
+{ const L = $("plist"); AREAS.forEach((_, ai) => { L.appendChild(pGrps[ai]);
+    ROSTER.filter(p => p.area === ai).sort((a, b) => a.crew - b.crew).forEach(p => L.appendChild(pRows[p.id])); }); }
+$("pAll").textContent = ROSTER.length;
+const setPMode = m => { pMode = m; $("pfNow").classList.toggle("on", m === "now"); $("pfAll").classList.toggle("on", m === "all"); lastPeople = ""; if (LAST_S) peoplePanel(LAST_S); };
+$("pfNow").onclick = () => setPMode("now"); $("pfAll").onclick = () => setPMode("all");
+let lastPeople = "", LAST_S = null;
+function peoplePanel(S) {
+  LAST_S = S;
+  const on = ROSTER.filter(p => onDuty(p, S)), nw = on.filter(p => p.crew !== 3).length, no = on.length - nw;
+  $("pOn").textContent = `на смене: ${on.length}`; $("pWork").textContent = nw; $("pOff").textContent = no;
+  const key = pMode + S.d + ":" + Math.floor(S.h * 60);
+  if (key === lastPeople) return; lastPeople = key;
+  const MONTH = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"][new Date(S.d * DAY).getUTCMonth()];
+  ROSTER.forEach(p => { const r = pRows[p.id], duty = onDuty(p, S); r.hidden = pMode === "now" && !duty;
+    if (r.hidden) return; const t = hoursOf(p, S), pill = r.querySelector(".pill");
+    pill.textContent = dutyText(p, S); pill.className = "pill " + (duty ? "ok" : "off");
+    r.querySelector(".tm").textContent = `${duty ? "на смене " + hm(sinceStart(p, S)) : "сегодня " + hm(t.today)} · ${MONTH} ${fmt(Math.floor(t.month))} ч`; });
+  AREAS.forEach((_, ai) => { const all = ROSTER.filter(p => p.area === ai), n = all.filter(p => onDuty(p, S)).length;
+    pGrps[ai].hidden = pMode === "now" && !n; pGrps[ai].lastChild.textContent = pMode === "now" ? `на смене ${n}` : `на смене ${n} из ${all.length}`; });
+  if (cardId && cardId.startsWith("p:")) { const p = ROSTER[selP], t = hoursOf(p, S);
+    $("cP").textContent = `${dutyText(p, S)[0].toUpperCase() + dutyText(p, S).slice(1)}. ${onDuty(p, S) ? `На этой смене ${hm(sinceStart(p, S))}` : `Сегодня отработал ${hm(t.today)}`}, с начала месяца — ${fmt(Math.floor(t.month))} ч.`; }
+}
 
 let lastPanel = 0, lastChart = -1;
 function loop() {
