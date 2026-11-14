@@ -514,8 +514,8 @@ let W = 0, H = 0, dpr = 1, k = 4, cx = 100, cy = 70;
 let autoFit = true;                    // пока человек сам не двигал карту, вид подстраивается под размер окна
 // площадка с полоской реки заполняет всё окно: по ширине и по высоте масштаб свой (растягивается под любое окно)
 let SY = 1;
-function fitAll() { autoFit = true; let kx = W / 202, ky = H / 192;
-  k = kx; SY = ky / kx; cx = 100; cy = 68; }
+function fitAll() { autoFit = true; let kx = W / 202, ky = H / 214;
+  k = kx; SY = ky / kx; cx = 100; cy = 57; }     // от дороги (164) до реки (−50)
 // высота карты по форме фабрики: в узком окне карта не выше самой фабрики — без пустых полос сверху и снизу
 function fitBox() { if (document.fullscreenElement) { box.style.height = ""; return; }
   if (innerWidth > 1000) { box.style.height = Math.max(480, $("side").offsetHeight) + "px"; return; }   // карта на всю высоту правой панели
@@ -731,6 +731,13 @@ function frame() {
   const nb = clamp(Math.round(S.stockBags / 2), 0, slots.length);
   for (let i = 0; i < nb; i++) wrect(slots[i][0] - 0.55, slots[i][1] - 0.55, 1.1, 1.1, "#EDEBE2");
 
+  // контейнеровоз идёт по реке мимо фабрики, туда и обратно
+  { const L = 420, u = (anim * 4 / L + 0.35) % 2, dir = u < 1 ? 1 : -1, x = -110 + (u < 1 ? u : 2 - u) * L, y = -36;
+    vehicle(x, y, dir > 0 ? 0 : Math.PI, 36, 8, "#24384D", null, null);
+    const back = dir > 0 ? -1 : 1;
+    wrect(x + back * 15 - 2.5, y - 3, 5, 6, "#F2F5F8"); wrect(x + back * 15 - 1.2, y - 1.5, 2.4, 3, "#2F6FC4");
+    ["#C0392B", "#2F6FC4", "#E8B92E", "#1E8449", "#C0392B", "#7F8C8D"].forEach((c, i) => wrect(x - back * 13 + back * i * 3.9 - 1.8 + (back < 0 ? 0 : -1.8) * 0, y - 2.8, 3.6, 5.6, c));
+    if (k > 2.4) tag(x, y + 6.5, "контейнеровоз «Меконг Стар»", "#7FC8D8"); }
   // баржи и краны
   S.barges.forEach(q => { if (!q.on) return;
     vehicle(q.x, q.y, 0, 22, 7, "#3E5873", "#F2F5F8", q.k > 0.02 ? "#8B5530" : null);
