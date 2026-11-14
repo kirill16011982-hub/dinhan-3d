@@ -166,7 +166,7 @@ body.light .clock i { color:var(--ember); }
       <div id="mclock">--:--</div>
       <div id="card" hidden><button class="x" id="cardX" aria-label="Закрыть">×</button><div class="z" id="cZ"></div><h3 id="cT"></h3><div class="a" id="cA"></div><p id="cP"></p><div class="live" id="cL"></div></div>
     </div>
-    <aside>
+    <aside id="side">
       <section class="panel"><h2>Сегодня <span id="todayNote">с 00:00</span></h2>
         <div class="tiles">
           <div class="tile hi"><b id="tAC">0</b><span>т активированного угля</span></div>
@@ -355,7 +355,7 @@ const sinceStart = (p, S) => p.crew === 3 ? clamp(S.h - 8, 0, 4) + clamp(S.h - 1
 const hm = x => { const m = Math.round(x * 60); return m < 60 ? `${m} мин` : `${Math.floor(m / 60)} ч ${String(m % 60).padStart(2, "0")} мин`; };
 
 // ---------- геометрия карты (метры: x — восток, y — север; участок 200 × 150 м, река на юге)
-const WB = { x0: -240, x1: 440, y0: -110, y1: 200 };
+const WB = { x0: -240, x1: 440, y0: -190, y1: 200 };
 const BL = "#2F8FD6", SV = "#C3C9D0", RD = "#D93A2B";
 // деревья вокруг площадки: кроны с тенью и бликом, считаются один раз
 const TREES = [];
@@ -396,8 +396,8 @@ function drawStatic(g, V) {
   // земля, поля, река
   R(V.x0, V.y0, V.x1 - V.x0, V.y1 - V.y0, P.ground);
   // вокруг площадки — ровная серая земля промпарка, без деревьев и полей (просьба Кирилла 14.11)
-  if (V.y0 < -14) { R(V.x0, Math.max(V.y0, -100), V.x1 - V.x0, -14 - Math.max(V.y0, -100), P.river);
-    for (let i = 0; i < 300; i++) { const x = WB.x0 + rnd(i * 3.1) * (WB.x1 - WB.x0), y = -95 + rnd(i * 5.7) * 78; if (vis(x, y, 6, 1)) L([[x, y], [x + 2 + rnd(i) * 5, y]], "rgba(150,215,225,.16)", 0.22); }
+  if (V.y0 < -14) { R(V.x0, Math.max(V.y0, -400), V.x1 - V.x0, -14 - Math.max(V.y0, -400), P.river);
+    for (let i = 0; i < 600; i++) { const x = WB.x0 + rnd(i * 3.1) * (WB.x1 - WB.x0), y = -175 + rnd(i * 5.7) * 158; if (vis(x, y, 6, 1)) L([[x, y], [x + 2 + rnd(i) * 5, y]], "rgba(150,215,225,.16)", 0.22); }
     R(V.x0, -16, V.x1 - V.x0, 2.2, P.bank); }
   // деревья: тень, крона, блик
   // дорога промпарка: асфальт, бордюры, белая разметка
@@ -510,20 +510,24 @@ for (let x = 28; x < 200; x += 24) LAMPS.push([x, 149]); for (let x = 14; x < 12
 // ---------- вид: перетаскивание, колесо, щипок
 const cv = $("map"), ctx = cv.getContext("2d"), box = $("mapbox");
 let W = 0, H = 0, dpr = 1, k = 4, cx = 100, cy = 70;
-function fitAll() { k = Math.min(W / 202, H / 172); cx = 100; cy = 74; }     // площадка от дороги до причала целиком
+// площадка во всю ширину, дорога у верхнего края, ниже — река; если реки больше ≈60 м, фабрика чуть крупнее (края площадки могут уйти за рамку)
+let autoFit = true;                    // пока человек сам не двигал карту, вид подстраивается под размер окна
+function fitAll() { autoFit = true; k = W / 202; if (H / k > 178 + 60) k = Math.min(H / (178 + 60), W / 182); if (H / k < 172) k = H / 172;
+  cx = 100; cy = 165 - H / (2 * k); }
 // высота карты по форме фабрики: в узком окне карта не выше самой фабрики — без пустых полос сверху и снизу
 function fitBox() { if (document.fullscreenElement) { box.style.height = ""; return; }
+  if (innerWidth > 1000) { box.style.height = Math.max(480, $("side").offsetHeight) + "px"; return; }   // карта на всю высоту правой панели
   const want = Math.round(box.clientWidth * 172 / 202), max = innerWidth > 1000 ? innerHeight - 150 : Math.round(innerHeight * 0.64);
   box.style.height = Math.max(320, Math.min(max, want)) + "px"; }
 function resize() { fitBox(); dpr = Math.min(2, devicePixelRatio || 1); W = box.clientWidth; H = box.clientHeight; cv.width = W * dpr; cv.height = H * dpr; }
 const sx = x => (x - cx) * k + W / 2, sy = y => (cy - y) * k + H / 2;
 const wx = px => (px - W / 2) / k + cx, wy = py => cy - (py - H / 2) / k;
-function zoomAt(f, px, py) { const x = wx(px), y = wy(py); k = clamp(k * f, Math.min(W / 330, H / 280), 30); cx = x - (px - W / 2) / k; cy = y + (py - H / 2) / k; }
+function zoomAt(f, px, py) { autoFit = false; const x = wx(px), y = wy(py); k = clamp(k * f, Math.min(W / 330, H / 280), 30); cx = x - (px - W / 2) / k; cy = y + (py - H / 2) / k; }
 const ptr = new Map(); let moved = 0, pinch0 = 0;
 cv.addEventListener("pointerdown", e => { cv.setPointerCapture(e.pointerId); ptr.set(e.pointerId, [e.offsetX, e.offsetY]); moved = 0; cv.classList.add("drag");
   if (ptr.size === 2) { const [a, b] = [...ptr.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
 cv.addEventListener("pointermove", e => { if (!ptr.has(e.pointerId)) return; const p = ptr.get(e.pointerId), dx = e.offsetX - p[0], dy = e.offsetY - p[1];
-  if (ptr.size === 1) { cx -= dx / k; cy += dy / k; moved += Math.abs(dx) + Math.abs(dy); }
+  if (ptr.size === 1) { cx -= dx / k; cy += dy / k; moved += Math.abs(dx) + Math.abs(dy); if (moved > 6) autoFit = false; }
   ptr.set(e.pointerId, [e.offsetX, e.offsetY]);
   if (ptr.size === 2) { const [a, b] = [...ptr.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch0) zoomAt(d / pinch0, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2); pinch0 = d; moved = 99; } });
 const up = e => { if (ptr.size === 1 && moved < 6) pick(e.offsetX, e.offsetY); ptr.delete(e.pointerId); if (ptr.size < 2) pinch0 = 0; if (!ptr.size) cv.classList.remove("drag"); };
@@ -556,7 +560,7 @@ function selectPerson(id, fly) {
   const p = ROSTER[id]; selP = id; cardId = "p:" + id; markRow();
   $("cZ").textContent = p.crew === 3 ? "Офис · пн–сб 08:00–17:00" : `Смена ${SHIFTS[p.crew][0]} · ${hhmm(SHIFTS[p.crew][1])}–${hhmm(SHIFTS[p.crew][2])} · ${AREAS[p.area]}`;
   $("cT").textContent = p.name; $("cA").textContent = p.role; $("cP").textContent = ""; $("card").hidden = false;
-  if (fly) { const q = NOW_P.find(q => q.p.id === id); if (q) { k = Math.max(k, 11); cx = q.x; cy = q.y + 2; } }
+  if (fly) { const q = NOW_P.find(q => q.p.id === id); if (q) { autoFit = false; k = Math.max(k, 11); cx = q.x; cy = q.y + 2; } }
   if (LAST_S) { lastPeople = ""; peoplePanel(LAST_S); }
   const row = document.querySelector(`.prow[data-id="${id}"]`); if (row && !fly) row.scrollIntoView({ block: "nearest" });
 }
@@ -937,12 +941,13 @@ function peoplePanel(S) {
 let lastPanel = 0, lastChart = -1;
 function loop() {
   const S = frame(), now = performance.now();
-  if (now - lastPanel > 250) { panels(S, simNow()); lastPanel = now; }
+  if (now - lastPanel > 250) { panels(S, simNow()); lastPanel = now;
+    if (innerWidth > 1000 && !document.fullscreenElement && Math.abs(Math.max(480, $("side").offsetHeight) - box.clientHeight) > 3) { resize(); if (autoFit) fitAll(); } }   // панель стала выше или ниже — карта за ней
   const ck = S.d * 100 + Math.floor(S.h * 4);
   if (ck !== lastChart) { lastChart = ck; chart("chAC", 1, D.acDay, "#F0935A", S); chart("chSh", 3, D.shellAU + D.shellB1, "#B97A45", S); chart("chBq", 6, D.bbqDay, "#D9A93A", S); chart("chCu", 2, D.cubeDay, "#4F8FD6", S); }
   requestAnimationFrame(loop);
 }
-window.addEventListener("resize", () => { resize(); lastChart = -1; });
+window.addEventListener("resize", () => { resize(); if (autoFit) fitAll(); lastChart = -1; });
 applyTheme(); resize(); fitAll(); loop();
 </script>
 </body>
