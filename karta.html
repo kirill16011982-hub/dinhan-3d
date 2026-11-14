@@ -188,7 +188,7 @@ body.light .clock i { color:var(--ember); }
       <section class="panel"><h2>Смена <span id="shName">—</span></h2>
         <div class="shift">
           <div class="row"><em>На площадке</em><b id="shPeople">—</b></div>
-          <div class="row"><em>Карбонизация</em><span class="pill hot" id="shCarb">5 из 5 · 400–600 °C</span></div>
+          <div class="row"><em>Карбонизация</em><span class="pill hot" id="shCarb">АУ 4 из 4 · 500–600 °C · Б1 550–700 °C</span></div>
           <div class="row"><em>Активация паром</em><span class="pill hot" id="shAct">6 из 6 · 850–1 000 °C</span></div>
           <div class="row"><em>Причал</em><span class="pill" id="shWharf">—</span></div>
           <div class="row"><em>Склад АУ</em><b id="shStock">—</b></div>
@@ -772,13 +772,16 @@ function frame() {
       if (k < 2.4) t = { "Карбонизация и дробление": "Карбонизация", "Активация паром": "Активация", "Упаковка и склад АУ": "Склад АУ", "Навес скорлупы АУ": "Скорлупа АУ", "Навес Блока 1": "Скорлупа Б1" }[t] || t;
       label(x, y, t.toUpperCase(), big ? 11 : 13, c); });
   if (k > 3.6) {
-    carbs.forEach(([x0, y], i) => tag(x0 + 17.5, y + 3.4, `${temp(530, 22, i)} °C`, "#FF8A4C"));
+    // карбонизация: Блок 1 (кубики) 550–700 °C, линии АУ №1–4 (уголь-сырец под активацию) 500–600 °C; т/ч — скорлупа на входе печи
+    carbs.forEach(([x0, y], i) => tag(x0 + 17.5, y + 3.4, i === 0 ? `Б1 · ${temp(625, 40, i)} °C · ${fmt(D.shellB1 / 24, 1)} т/ч`
+      : `№${i} · ${temp(550, 30, i)} °C · ${fmt(D.shellAU / 4 / 24, 1)} т/ч`, "#FF8A4C"));
+    tag(48.5, 74.5, `уксус · ${temp(350, 50, 7)} °C`, "#7FC8D8");
     [61, 68, 75, 82, 89, 96].forEach((y, i) => tag(163, y - 3.1, S.maint && i === S.mk ? `№${i + 1} · ОСМОТР` : `№${i + 1} · ${temp(935, 18, i + 9)} °C · 210 кг/ч`, S.maint && i === S.mk ? "#F2C14E" : "#FF8A4C"));
     tag(151, 27.2, `пар ${fmt(temp(118, 3, 4) / 10, 1)} бар`, "#7FC8D8");
   } else {
     const sm = k < 2.4;
-    tag(102, 79, sm ? `${temp(530, 15, 1)} °C` : `4 линии · ${temp(530, 15, 1)} °C`, "#FF8A4C");
-    tag(166, 79, sm ? `${S.maint ? 5 : 6}/6 · ${temp(935, 12, 2)} °C` : `${S.maint ? 5 : 6} из 6 печей · ${temp(935, 12, 2)} °C`, "#FF8A4C"); tag(30, 67, `${temp(525, 15, 3)} °C`, "#FF8A4C");
+    tag(102, 79, sm ? `${temp(550, 20, 1)} °C` : `4 линии · ${temp(550, 20, 1)} °C`, "#FF8A4C");
+    tag(166, 79, sm ? `${S.maint ? 5 : 6}/6 · ${temp(935, 12, 2)} °C` : `${S.maint ? 5 : 6} из 6 печей · ${temp(935, 12, 2)} °C`, "#FF8A4C"); tag(30, 67, `${temp(625, 25, 3)} °C`, "#FF8A4C");
   }
   drawRadar(S);
   return S;
