@@ -659,6 +659,75 @@ function personAt(p) {
 }
 let selP = null, NOW_P = [];
 const wcirc = (x, y, r, c) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(sx(x), sy(y), Math.max(1.2, r * k), 0, 7); ctx.fill(); };
+// ---------- техника: рисуется в метрах вокруг своей точки, с растяжкой карты (k и SY), нос — по направлению движения
+function sprite(x, y, a, draw) { ctx.save(); ctx.translate(sx(x), sy(y)); ctx.scale(k, k * SY); ctx.rotate(-a); ctx.lineJoin = "round"; draw(ctx); ctx.restore(); }
+function rr(g, x, y, w, h, r, fill) { g.beginPath(); if (g.roundRect) g.roundRect(x, y, w, h, Math.min(r, w / 2, h / 2)); else g.rect(x, y, w, h); g.fillStyle = fill; g.fill(); }
+function lin(g, x0, y0, x1, y1, stops) { const gr = g.createLinearGradient(x0, y0, x1, y1); stops.forEach(([o, c]) => gr.addColorStop(o, c)); return gr; }
+const SHADOW = "rgba(20,25,30,.30)";
+function wheels(g, xs, w, d = 0.95) { g.fillStyle = "#16181B"; xs.forEach(x => { g.fillRect(x - d / 2, -w / 2 - 0.18, d, 0.32); g.fillRect(x - d / 2, w / 2 - 0.14, d, 0.32); }); }
+// фура: тягач (кабина со стеклом и зеркалами) + полуприцеп; kind: box — контейнер с рёбрами, tank — цистерна, flat — бортовая с поддонами
+function truck(x, y, a, len, w, cab, body, kind) { sprite(x, y, a, g => {
+  const L = len / 2, cabL = 2.3, tx = L - cabL - 0.35;
+  rr(g, -L + 0.35, -w / 2 + 0.45, len, w, 0.35, SHADOW);
+  wheels(g, kind === "tank" ? [-L + 1.2, -L + 2.3, tx - 1.2, L - 1.1] : [-L + 1.1, -L + 2.2, -L + 3.3, L - 1.6, L - 0.7], w);
+  if (kind === "tank") { rr(g, -L, -w / 2 + 0.1, tx + L, w - 0.2, w / 2, lin(g, 0, -w / 2, 0, w / 2, [[0, "#7F8A94"], [0.45, "#E9EDF0"], [1, "#6E7882"]]));
+    g.strokeStyle = "rgba(0,0,0,.25)"; g.lineWidth = 0.08; [-L + 2.5, -L + 5, -L + 7.4].forEach(xx => { if (xx < tx - 0.5) { g.beginPath(); g.moveTo(xx, -w / 2 + 0.2); g.lineTo(xx, w / 2 - 0.2); g.stroke(); } });
+    rr(g, -L + 3, -0.35, 1.2, 0.7, 0.2, "#5B6670"); }
+  else if (kind === "flat") { rr(g, -L, -w / 2, tx + L, w, 0.15, "#5E4A36");
+    for (let i = 0; i < 4; i++) rr(g, -L + 0.3 + i * ((tx + L - 0.6) / 4), -w / 2 + 0.25, (tx + L - 0.6) / 4 - 0.25, w - 0.5, 0.1, i % 2 ? "#3A2A1C" : "#4A3524"); }
+  else { rr(g, -L, -w / 2, tx + L, w, 0.15, lin(g, 0, -w / 2, 0, w / 2, [[0, body], [0.5, shade(body, 0.22)], [1, shade(body, -0.25)]]));
+    g.strokeStyle = "rgba(0,0,0,.22)"; g.lineWidth = 0.07; for (let xx = -L + 0.5; xx < tx - 0.2; xx += 0.55) { g.beginPath(); g.moveTo(xx, -w / 2 + 0.12); g.lineTo(xx, w / 2 - 0.12); g.stroke(); } }
+  rr(g, tx + 0.15, -w / 2 + 0.15, cabL, w - 0.3, 0.45, lin(g, 0, -w / 2, 0, w / 2, [[0, shade(cab, -0.2)], [0.5, shade(cab, 0.2)], [1, shade(cab, -0.3)]]));
+  rr(g, tx + cabL - 0.55, -w / 2 + 0.3, 0.42, w - 0.6, 0.15, "#1F2B36");                 // лобовое стекло
+  rr(g, tx + 0.5, -w / 2 + 0.45, 1.1, w - 0.9, 0.2, "rgba(255,255,255,.18)");            // крыша
+  g.fillStyle = "#1A1C1F"; g.fillRect(tx + cabL - 0.8, -w / 2 - 0.3, 0.2, 0.3); g.fillRect(tx + cabL - 0.8, w / 2, 0.2, 0.3);   // зеркала
+}); }
+function car(x, y, a, len, w, body) { sprite(x, y, a, g => { const L = len / 2;
+  rr(g, -L + 0.25, -w / 2 + 0.3, len, w, 0.6, SHADOW); wheels(g, [-L + 0.85, L - 0.85], w, 0.6);
+  rr(g, -L, -w / 2, len, w, 0.6, lin(g, 0, -w / 2, 0, w / 2, [[0, shade(body, -0.2)], [0.5, shade(body, 0.25)], [1, shade(body, -0.3)]]));
+  rr(g, L - 1.45, -w / 2 + 0.2, 0.55, w - 0.4, 0.2, "#1F2B36"); rr(g, -L + 0.35, -w / 2 + 0.25, 0.4, w - 0.5, 0.15, "#1F2B36");
+  rr(g, -L + 0.85, -w / 2 + 0.3, len - 2.4, w - 0.6, 0.3, shade(body, 0.08)); }); }
+// фронтальный погрузчик: жёлтый корпус, кабина, ковш спереди (со скорлупой, когда везёт)
+function loader(x, y, a, len, w, load) { sprite(x, y, a, g => { const L = len / 2;
+  rr(g, -L + 0.25, -w / 2 + 0.3, len, w, 0.3, SHADOW); wheels(g, [-L + 0.75, L - 1.35], w + 0.1, 0.8);
+  rr(g, -L, -w / 2 + 0.1, len - 0.8, w - 0.2, 0.3, lin(g, 0, -w / 2, 0, w / 2, [[0, "#C9961C"], [0.5, "#F5CB45"], [1, "#B8860B"]]));
+  rr(g, -L + 0.9, -w / 2 + 0.3, 1.1, w - 0.6, 0.2, "#2A2D31"); rr(g, -L + 1.05, -w / 2 + 0.45, 0.8, w - 0.9, 0.15, "#4D6A82");   // кабина
+  rr(g, L - 0.95, -w / 2 - 0.15, 0.95, w + 0.3, 0.15, "#5C6066");                                                                   // ковш
+  if (load) rr(g, L - 0.85, -w / 2, 0.75, w, 0.3, load); }); }
+// вилочный погрузчик: мачта и вилы спереди, биг-бэг на вилах
+function forklift(x, y, a, len, w, load) { sprite(x, y, a, g => { const L = len / 2;
+  rr(g, -L + 0.2, -w / 2 + 0.25, len, w, 0.25, SHADOW); wheels(g, [-L + 0.5, L - 0.9], w, 0.55);
+  rr(g, -L, -w / 2, len - 0.6, w, 0.25, lin(g, 0, -w / 2, 0, w / 2, [[0, "#C9961C"], [0.5, "#F5CB45"], [1, "#B8860B"]]));
+  rr(g, -L + 0.2, -w / 2 + 0.2, 0.55, w - 0.4, 0.15, "#2A2D31");
+  g.fillStyle = "#3A3D42"; g.fillRect(L - 0.65, -w / 2 + 0.1, 0.15, w - 0.2); g.fillRect(L - 0.5, -w / 2 + 0.25, 0.75, 0.12); g.fillRect(L - 0.5, w / 2 - 0.37, 0.75, 0.12);
+  if (load) rr(g, L - 0.45, -w / 2 + 0.05, 0.85, w - 0.1, 0.2, load); }); }
+// корпус судна: корма прямая, нос острый
+function hull(g, L, w, fill) { g.beginPath(); g.moveTo(-L / 2, -w / 2); g.lineTo(L / 2 - w * 0.55, -w / 2); g.quadraticCurveTo(L / 2, -w * 0.2, L / 2 + 0.2, 0);
+  g.quadraticCurveTo(L / 2, w * 0.2, L / 2 - w * 0.55, w / 2); g.lineTo(-L / 2, w / 2); g.closePath(); g.fillStyle = fill; g.fill(); }
+// баржа со скорлупой: тёмный корпус, привальный брус, трюм с кучей скорлупы, белая рубка на корме, кранцы
+function barge(x, y, a, L, w, fill) { sprite(x, y, a, g => {
+  g.save(); g.translate(0.6, 0.8); hull(g, L, w, "rgba(10,30,40,.30)"); g.restore();
+  hull(g, L, w, "#2E4257"); hull(g, L - 0.7, w - 0.7, "#5A7088");
+  const hx0 = -L / 2 + 4.6, hx1 = L / 2 - w * 0.6 - 0.4;
+  rr(g, hx0, -w / 2 + 0.75, hx1 - hx0, w - 1.5, 0.2, "#26313B");
+  if (fill > 0.02) { const pw = (hx1 - hx0 - 0.4) * Math.min(1, 0.35 + fill * 0.65);
+    rr(g, hx0 + 0.2, -w / 2 + 0.95, pw, w - 1.9, 0.9, lin(g, 0, -w / 2, 0, w / 2, [[0, "#6B3E1F"], [0.5, "#9C6534"], [1, "#5E361B"]]));
+    g.fillStyle = "rgba(40,20,8,.35)"; for (let i = 0; i < 26; i++) g.fillRect(hx0 + 0.4 + rnd(i * 1.7) * (pw - 0.8), -w / 2 + 1.1 + rnd(i * 2.9) * (w - 2.3), 0.22, 0.22); }
+  else { g.strokeStyle = "rgba(255,255,255,.08)"; g.lineWidth = 0.08; for (let xx = hx0 + 0.6; xx < hx1; xx += 1.1) { g.beginPath(); g.moveTo(xx, -w / 2 + 0.8); g.lineTo(xx, w / 2 - 0.8); g.stroke(); } }
+  rr(g, -L / 2 + 0.6, -w / 2 + 0.9, 3.4, w - 1.8, 0.3, "#E9EDF0"); rr(g, -L / 2 + 2.9, -w / 2 + 1.1, 0.45, w - 2.2, 0.1, "#2B4A66");   // рубка и окна
+  g.fillStyle = "#15171A"; for (let xx = -L / 2 + 2; xx < L / 2 - 3; xx += 3.2) { g.beginPath(); g.arc(xx, -w / 2, 0.28, 0, 7); g.fill(); g.beginPath(); g.arc(xx, w / 2, 0.28, 0, 7); g.fill(); }
+}); }
+// контейнеровоз: корпус, ряды контейнеров, белая надстройка с мостиком на корме, белый след за кормой
+function ship(x, y, a, L, w) { sprite(x, y, a, g => {
+  g.fillStyle = "rgba(255,255,255,.25)"; g.beginPath(); g.moveTo(-L / 2, -w / 2 + 0.6); g.lineTo(-L / 2 - 14, -w / 2 - 2); g.lineTo(-L / 2 - 14, w / 2 + 2); g.lineTo(-L / 2, w / 2 - 0.6); g.fill();
+  g.save(); g.translate(0.7, 0.9); hull(g, L, w, "rgba(10,30,40,.30)"); g.restore();
+  hull(g, L, w, "#1E2E3E"); hull(g, L - 0.8, w - 0.8, "#8E3B2E"); hull(g, L - 1.6, w - 1.6, "#5D6670");
+  const C = ["#C0392B", "#2F6FC4", "#E8B92E", "#1E8449", "#D35400", "#7F8C8D", "#2C3E50", "#C0392B", "#16A085"];
+  for (let i = 0; i < 6; i++) for (let j = 0; j < 3; j++) { const cx0 = -L / 2 + 7.5 + i * 3.6, cy0 = -w / 2 + 1.1 + j * ((w - 2.2) / 3);
+    rr(g, cx0, cy0, 3.3, (w - 2.2) / 3 - 0.25, 0.08, C[(i * 3 + j * 5) % C.length]);
+    g.fillStyle = "rgba(255,255,255,.18)"; g.fillRect(cx0, cy0, 3.3, 0.18); }
+  rr(g, -L / 2 + 1, -w / 2 + 0.9, 5, w - 1.8, 0.3, "#F1F3F5"); rr(g, -L / 2 + 4.6, -w / 2 + 0.7, 0.9, w - 1.4, 0.2, "#E2E6EA"); rr(g, -L / 2 + 5.1, -w / 2 + 1, 0.3, w - 2, 0.1, "#2B4A66");
+}); }
 function vehicle(x, y, a, len, wid, body, cab, load) {
   ctx.save(); ctx.translate(sx(x), sy(y)); ctx.rotate(-a);
   ctx.fillStyle = "rgba(0,0,0,.4)"; ctx.fillRect(-len / 2 * k + 2, -wid / 2 * k + 2, len * k, wid * k);
@@ -733,14 +802,11 @@ function frame() {
 
   // контейнеровоз идёт по реке мимо фабрики, туда и обратно
   { const L = 420, u = (anim * 4 / L + 0.35) % 2, dir = u < 1 ? 1 : -1, x = -110 + (u < 1 ? u : 2 - u) * L, y = -36;
-    vehicle(x, y, dir > 0 ? 0 : Math.PI, 36, 8, "#24384D", null, null);
-    const back = dir > 0 ? -1 : 1;
-    wrect(x + back * 15 - 2.5, y - 3, 5, 6, "#F2F5F8"); wrect(x + back * 15 - 1.2, y - 1.5, 2.4, 3, "#2F6FC4");
-    ["#C0392B", "#2F6FC4", "#E8B92E", "#1E8449", "#C0392B", "#7F8C8D"].forEach((c, i) => wrect(x - back * 13 + back * i * 3.9 - 1.8 + (back < 0 ? 0 : -1.8) * 0, y - 2.8, 3.6, 5.6, c));
+    ship(x, y, dir > 0 ? 0 : Math.PI, 36, 8.5);
     if (k > 2.4) tag(x, y + 6.5, "контейнеровоз «Меконг Стар»", "#7FC8D8"); }
   // баржи и краны
   S.barges.forEach(q => { if (!q.on) return;
-    vehicle(q.x, q.y, 0, 22, 7, "#3E5873", "#F2F5F8", q.k > 0.02 ? "#8B5530" : null);
+    barge(q.x, q.y, Math.PI, 22, 7, q.k);
     if (q.ph === "unload") { const cxr = q.b.to === "au" ? 110 : 31, u = (Math.sin(anim * 1.1) + 1) / 2, gy = -22 + u * 30;
       wrect(cxr - 0.3, -24, 0.6, 33, "rgba(242,193,78,.85)"); wrect(cxr - 1.1, gy - 1.1, 2.2, 2.2, "#2B2B2B"); }
     if (k > 2.4) tag(q.x, q.y + 6, `«${q.b.name}» ${fmt(q.tons - q.got)} т`, "#7FC8D8");
@@ -748,19 +814,20 @@ function frame() {
   [31, 110].forEach(x => { wrect(x - 2.5, -11, 5, 1.2, "#E8C22E"); });
   // погрузчики-ковши: со склада к бункеру печей
   [[[[25, 30], [25, 50.2], [80.8, 50.2]], 40, 0], [[[104, 36], [104, 50.2], [80.8, 50.2]], 32, 0.3], [[[120, 30], [120, 47], [80.8, 50.2]], 38, 0.7]].forEach(([P, per, ph]) => {
-    const v = shuttle(P, per, ph); vehicle(v.x, v.y, v.a, 3.6, 2, "#E8B92E", "#2B2B2B", v.loaded ? "#8B5530" : null); });
+    const v = shuttle(P, per, ph); loader(v.x, v.y, v.a, 3.8, 2.1, v.loaded ? "#8B5530" : null); });
   // мелочь с дробления к прессу брикетов
-  { const v = shuttle([[130, 92], [136, 92], [136, 27], [145.5, 24]], 46, 0.15); vehicle(v.x, v.y, v.a, 3.2, 1.8, "#E8B92E", "#2B2B2B", v.loaded ? "#222" : null); }
+  { const v = shuttle([[130, 92], [136, 92], [136, 27], [145.5, 24]], 46, 0.15); loader(v.x, v.y, v.a, 3.4, 1.9, v.loaded ? "#2A2522" : null); }
   // погрузчики на складах
   [[[[12, 126.2], [54, 126.2]], 20, 0], [[[152, 111.5], [186, 111.5]], 22, 0.4], [[[166, 127.5], [158, 128.8], [150, 128.8]], 16, 0.2]].forEach(([P, per, ph]) => {
-    const v = shuttle(P, per, ph); vehicle(v.x, v.y, v.a, 2.6, 1.4, "#E8B92E", "#2B2B2B", v.loaded ? "#EDEBE2" : null); });
+    const v = shuttle(P, per, ph); forklift(v.x, v.y, v.a, 2.8, 1.4, v.loaded ? "#EDEBE2" : null); });
   // фуры
   S.trucks.forEach(q => { if (!q.on) return; const c = q.t.c;
-    if (q.t.kind === "wv") vehicle(q.x, q.y, q.a, 11, 2.5, "#B9C0C7", "#2F6FC4", null); else vehicle(q.x, q.y, q.a, q.t.kind === "bbq" ? 9 : 14, 2.6, c, "#DDE3E8", null);
+    truck(q.x, q.y, q.a, q.t.kind === "wv" ? 11 : q.t.kind === "bbq" ? 10 : 15, 2.5, q.t.kind === "wv" ? "#2F6FC4" : "#E9ECEF", c, q.t.kind === "wv" ? "tank" : q.t.kind === "bbq" ? "flat" : "box");
     if (k > 2.4) tag(q.x, q.y + 3.6, q.ph === "load" ? `${q.t.plate} · погрузка ${Math.round(q.k * 100)}%` : q.t.plate, "#F0935A"); });
   // машины на дороге промпарка
   for (let i = 0; i < 6; i++) { const dir = i % 2 ? 1 : -1, x = ((anim * (6 + i) * 1.2 + i * 61) % 360) - 80;
-    vehicle(dir > 0 ? x : 280 - x - 80, dir > 0 ? 155.4 : 159.6, dir > 0 ? 0 : Math.PI, i % 3 ? 4.4 : 10, 1.9, ["#C0392B", "#E8EDF2", "#2F6FC4", "#7F8C8D", "#E8B92E", "#1E8449"][i], null, null); }
+    const vx = dir > 0 ? x : 280 - x - 80, vy = dir > 0 ? 155.4 : 159.6, va = dir > 0 ? 0 : Math.PI, col = ["#C0392B", "#E8EDF2", "#2F6FC4", "#7F8C8D", "#E8B92E", "#1E8449"][i];
+    if (i % 3) car(vx, vy, va, 4.4, 1.85, col); else truck(vx, vy, va, 11, 2.3, col, "#C9CED4", "box"); }
 
   // люди текущей смены (каска — цвет смены), имена при приближении
   NOW_P = ROSTER.filter(p => onDuty(p, S)).map(p => Object.assign({ p }, personAt(p))).sort((a, b) => b.y - a.y);
