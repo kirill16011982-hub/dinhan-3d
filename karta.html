@@ -131,7 +131,7 @@ body.light { --ground:#EEF0EA; --panel:#FFFFFF; --raise:#F2F3EE; --line:#D6DAD0;
   --ember:#C8571F; --gold:#9A6A00; --steam:#1F6F84; --leaf:#2E7D3A; color-scheme: light; }
 body.light h1 { text-shadow:2px 2px 0 rgba(0,0,0,.12); }
 body.light .btn.on { background:#1D2326; color:#FFFFFF; border-color:#1D2326; }
-body.light .mapbox { background:#DCE3D6; }
+body.light .mapbox { background:#D3D6D0; }
 body.light #card, body.light .mapnote, body.light #mclock { background:rgba(255,255,255,.95); }
 body.light #card p { color:#323A3E; }
 body.light #log li { border-bottom-color:rgba(0,0,0,.06); }
@@ -367,11 +367,11 @@ const PALMS = [[-2, 20], [-2, 60], [-2, 100], [-2, 140], [202, 15], [202, 55], [
 // статичный слой рисуется заново каждый кадр в мировых метрах — линии чёткие при любом приближении
 // палитры карты: светлая (день, по умолчанию) и тёмная
 const PAL = {
-  light: { bg: "#DCE3D6", ground: "#8DAE6A", fields: ["#C3CB82", "#B2C176", "#CFCB92"], river: "#3F95AA", bank: "#A3B27A",
+  light: { bg: "#D3D6D0", ground: "#C9CCC5", fields: ["#C3CB82", "#B2C176", "#CFCB92"], river: "#3F95AA", bank: "#B9BCB4",
     trees: ["#4E8A3E", "#5C9746", "#467E3A", "#69A24E", "#558C42"], curb: "#C2C6C8", asph: "#62676C", site: "#CBCDC8", quay: "#B5B8B4",
     road: "#70757A", floor: "#E3E4DF", office: "#EEE8DA", wall: "#6D767E", canopy: "#D8CBB2", pad: "#C6C9C5", weigh: "#C2C6C9",
     lawn: "#6FA352", fence: "#6D767E", shadow: "rgba(40,50,40,.22)", night: false },
-  dark: { bg: "#0B0D0F", ground: "#1C2B1D", fields: ["#3C4E2A", "#34472A", "#455A30"], river: "#0F3A46", bank: "#2E3B2C",
+  dark: { bg: "#0B0D0F", ground: "#202326", fields: ["#3C4E2A", "#34472A", "#455A30"], river: "#0F3A46", bank: "#34383C",
     trees: ["#24492A", "#2B5530", "#1F4026", "#305C33", "#27502C"], curb: "#5B6066", asph: "#303337", site: "#3A3D40", quay: "#4A4E53",
     road: "#2A2C30", floor: "#2D3136", office: "#4A4740", wall: "#C9CED3", canopy: "#3A342D", pad: "#34383C", weigh: "#3A3E44",
     lawn: "#2D5A33", fence: "#A9B0B6", shadow: "rgba(0,0,0,.38)" },
@@ -395,16 +395,11 @@ function drawStatic(g, V) {
 
   // земля, поля, река
   R(V.x0, V.y0, V.x1 - V.x0, V.y1 - V.y0, P.ground);
-  for (let i = 0; i < 18; i++) for (let j = 0; j < 3; j++) { const x = -240 + i * 38, y = 165 + j * 11; if (!vis(x, y, 36, 9.5)) continue;
-    R(x, y, 36, 9.5, P.fields[(i + j) % 3]);
-    for (let r = 0.8; r < 9.5; r += 1.2) L([[x, y + r], [x + 36, y + r]], "rgba(0,0,0,.12)", 0.25); }
+  // вокруг площадки — ровная серая земля промпарка, без деревьев и полей (просьба Кирилла 14.11)
   if (V.y0 < -14) { R(V.x0, Math.max(V.y0, -100), V.x1 - V.x0, -14 - Math.max(V.y0, -100), P.river);
     for (let i = 0; i < 300; i++) { const x = WB.x0 + rnd(i * 3.1) * (WB.x1 - WB.x0), y = -95 + rnd(i * 5.7) * 78; if (vis(x, y, 6, 1)) L([[x, y], [x + 2 + rnd(i) * 5, y]], "rgba(150,215,225,.16)", 0.22); }
     R(V.x0, -16, V.x1 - V.x0, 2.2, P.bank); }
   // деревья: тень, крона, блик
-  TREES.forEach(([x, y, r, c, light]) => { if (!vis(x - r, y - r, 2 * r + 1.5, 2 * r)) return;
-    C(x + 0.9, y - 0.9, r, "rgba(0,0,0,.35)"); C(x, y, r, P.trees[c]);
-    if (k > 1.6) C(x - r * 0.3, y + r * 0.3, r * 0.45, light ? "rgba(140,190,110,.22)" : "rgba(120,170,100,.12)"); });
   // дорога промпарка: асфальт, бордюры, белая разметка
   R(V.x0, 151, V.x1 - V.x0, 13, P.curb); R(V.x0, 152, V.x1 - V.x0, 11, P.asph);
   L([[V.x0, 157.5], [V.x1, 157.5]], "#E8E6DF", 0.22, [3, 3]); L([[V.x0, 152.6], [V.x1, 152.6]], "rgba(232,230,223,.5)", 0.15); L([[V.x0, 162.4], [V.x1, 162.4]], "rgba(232,230,223,.5)", 0.15);
@@ -515,7 +510,7 @@ for (let x = 28; x < 200; x += 24) LAMPS.push([x, 149]); for (let x = 14; x < 12
 // ---------- вид: перетаскивание, колесо, щипок
 const cv = $("map"), ctx = cv.getContext("2d"), box = $("mapbox");
 let W = 0, H = 0, dpr = 1, k = 4, cx = 100, cy = 70;
-function fitAll() { k = Math.min(W / 212, H / 200); cx = 100; cy = 62; }
+function fitAll() { k = Math.min(W / 202, H / 178); cx = 100; cy = 75; }     // вся площадка от дороги до реки — во всё окно
 function resize() { dpr = Math.min(2, devicePixelRatio || 1); W = box.clientWidth; H = box.clientHeight; cv.width = W * dpr; cv.height = H * dpr; }
 const sx = x => (x - cx) * k + W / 2, sy = y => (cy - y) * k + H / 2;
 const wx = px => (px - W / 2) / k + cx, wy = py => cy - (py - H / 2) / k;
@@ -802,7 +797,7 @@ function drawRadar(S) {
   rx.setTransform(d, 0, 0, d, 0, 0); rx.clearRect(0, 0, R, R);
   rx.save(); rx.beginPath(); rx.arc(R / 2, R / 2, R / 2, 0, 7); rx.clip();
   const s = R / 250, X = x => R / 2 + (x - 100) * s, Y = y => R / 2 - (y - 65) * s;
-  rx.fillStyle = "#1A2A1E"; rx.fillRect(0, 0, R, R); rx.fillStyle = "#0E3540"; rx.fillRect(0, Y(-14), R, R);
+  rx.fillStyle = "#2A2D30"; rx.fillRect(0, 0, R, R); rx.fillStyle = "#0E3540"; rx.fillRect(0, Y(-14), R, R);
   rx.fillStyle = "#3A3E44"; rx.fillRect(X(0), Y(150), 200 * s, 162 * s); rx.fillStyle = "#24272B"; rx.fillRect(0, Y(163), R, 11 * s);
   D.scene.forEach(o => { if (!o.w) return; rx.fillStyle = "#6E7780"; rx.fillRect(X(o.x), Y(o.y + o.d), o.w * s, o.d * s); });
   S.barges.forEach(q => { if (q.on) { rx.fillStyle = "#7FC8D8"; rx.fillRect(X(q.x) - 3, Y(q.y) - 1.5, 6, 3); } });
