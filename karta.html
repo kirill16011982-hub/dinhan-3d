@@ -510,8 +510,12 @@ for (let x = 28; x < 200; x += 24) LAMPS.push([x, 149]); for (let x = 14; x < 12
 // ---------- вид: перетаскивание, колесо, щипок
 const cv = $("map"), ctx = cv.getContext("2d"), box = $("mapbox");
 let W = 0, H = 0, dpr = 1, k = 4, cx = 100, cy = 70;
-function fitAll() { k = Math.min(W / 202, H / 178); cx = 100; cy = 75; }     // вся площадка от дороги до реки — во всё окно
-function resize() { dpr = Math.min(2, devicePixelRatio || 1); W = box.clientWidth; H = box.clientHeight; cv.width = W * dpr; cv.height = H * dpr; }
+function fitAll() { k = Math.min(W / 202, H / 172); cx = 100; cy = 74; }     // площадка от дороги до причала целиком
+// высота карты по форме фабрики: в узком окне карта не выше самой фабрики — без пустых полос сверху и снизу
+function fitBox() { if (document.fullscreenElement) { box.style.height = ""; return; }
+  const want = Math.round(box.clientWidth * 172 / 202), max = innerWidth > 1000 ? innerHeight - 150 : Math.round(innerHeight * 0.64);
+  box.style.height = Math.max(320, Math.min(max, want)) + "px"; }
+function resize() { fitBox(); dpr = Math.min(2, devicePixelRatio || 1); W = box.clientWidth; H = box.clientHeight; cv.width = W * dpr; cv.height = H * dpr; }
 const sx = x => (x - cx) * k + W / 2, sy = y => (cy - y) * k + H / 2;
 const wx = px => (px - W / 2) / k + cx, wy = py => cy - (py - H / 2) / k;
 function zoomAt(f, px, py) { const x = wx(px), y = wy(py); k = clamp(k * f, Math.min(W / 330, H / 280), 30); cx = x - (px - W / 2) / k; cy = y + (py - H / 2) / k; }
