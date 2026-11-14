@@ -107,9 +107,16 @@ aside { display:flex; flex-direction:column; gap:14px; min-width:0; }
 .prow .st .tm { font-family:var(--mono); color:var(--muted); font-size:11px; }
 .pill.off { color:var(--muted); }
 .prow[hidden], .pgrp[hidden] { display:none; }
-.charts { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:14px; }
+.charts { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:14px; }
 @media (max-width: 1400px) { .charts { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
-.chart { height:170px; width:100%; display:block; }
+.chart { height:190px; width:100%; display:block; cursor:crosshair; }
+.charts .panel { position:relative; }
+.ctip { position:absolute; top:44px; z-index:3; min-width:190px; max-width:260px; padding:8px 10px; background:var(--panel); border:1px solid var(--line);
+  border-left:3px solid var(--gold); box-shadow:0 6px 18px rgba(0,0,0,.18); font-size:12px; line-height:1.4; pointer-events:none; display:flex; flex-direction:column; gap:1px; }
+.ctip[hidden] { display:none; }
+.ctip b { font-family:var(--display); font-size:13px; letter-spacing:.06em; text-transform:uppercase; }
+.ctip .v { font-family:var(--display); font-size:17px; font-weight:600; }
+.ctip span { color:var(--muted); } .ctip .v { color:var(--paper); } .ctip .n { font-family:var(--mono); font-size:11px; }
 .foot { color:var(--muted); font-size:12px; line-height:1.5; max-width:110ch; }
 @media (max-width: 1000px) {
   .main { grid-template-columns:minmax(0, 1fr); }
@@ -820,23 +827,66 @@ function panels(S, ms) {
     $("cL").textContent = L || ""; }
   peoplePanel(S); renderLog(S);
 }
+// что показывает столбик: название продукта, во что превращается, цена за тонну
+const CH = {
+  chAC: { what: "т активированного угля", dec: 1, price: () => D.priceAC, extra: v => `≈${fmt(v / 0.5)} биг-бэгов по 500 кг` },
+  chSh: { what: "т скорлупы принято с барж", dec: 0, price: () => D.priceShell, extra: () => "сырьё для АУ и Блока 1", cost: true },
+  chCu: { what: "т кальянных кубиков", dec: 1, price: () => D.priceCube, extra: v => `≈${fmt(v / 19.4, 1)} контейнера (в контейнере ≈19 т)` },
+  chBq: { what: "т брикетов барбекю", dec: 1, price: () => D.priceBbq, extra: () => "из мелочи после дробления" },
+};
 function chart(id, key, nominal, color, S) {
-  const c = $(id), w = c.clientWidth, h = c.clientHeight, d = Math.min(2, devicePixelRatio || 1);
+  const c = $(id), w = c.clientWidth, h = c.clientHeight, d = Math.min(2, devicePixelRatio || 1), cf = CH[id];
   if (c.width !== Math.round(w * d)) { c.width = Math.round(w * d); c.height = Math.round(h * d); }
   const g = c.getContext("2d"); g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, w, h);
-  const N = 14, vals = []; for (let i = N - 1; i >= 0; i--) { const dd = S.d - i; vals.push(i === 0 ? nominal * dayF(dd, key) * S.h / 24 : nominal * dayF(dd, key)); }
+  const N = 14, vals = [], days = []; for (let i = N - 1; i >= 0; i--) { const dd = S.d - i; days.push(dd); vals.push(i === 0 ? nominal * dayF(dd, key) * S.h / 24 : nominal * dayF(dd, key)); }
   const top = nominal * 1.2, L = 34, B = 22, T = 12, bw = (w - L - 8) / N;
+  c._m = { L, bw, N, vals, days, nominal, key, h: S.h };
   g.font = "500 11px 'JetBrains Mono', monospace"; g.textBaseline = "middle"; g.textAlign = "right";
   [0, 0.5, 1].forEach(f => { const v = top * f, y = h - B - (h - B - T) * f; g.strokeStyle = THEME === "light" ? "rgba(0,0,0,.08)" : "rgba(255,255,255,.07)"; g.beginPath(); g.moveTo(L, y); g.lineTo(w - 4, y); g.stroke();
     g.fillStyle = "#9A9F98"; g.fillText(fmt(v), L - 5, y); });
   const yn = h - B - (h - B - T) * nominal / top; g.strokeStyle = "rgba(242,193,78,.6)"; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(L, yn); g.lineTo(w - 4, yn); g.stroke(); g.setLineDash([]);
-  g.fillStyle = "#F2C14E"; g.textAlign = "left"; g.fillText("норма " + fmt(nominal, 1), L + 4, yn - 8);
-  vals.forEach((v, i) => { const bh = (h - B - T) * v / top, x = L + i * bw + 2; g.fillStyle = i === N - 1 ? (THEME === "light" ? "rgba(0,0,0,.08)" : "rgba(255,255,255,.18)") : color;
-    g.fillRect(x, h - B - bh, bw - 4, bh); if (i === N - 1) { g.strokeStyle = color; g.strokeRect(x + 0.5, h - B - bh + 0.5, bw - 5, bh - 1); } });
-  g.fillStyle = "#9A9F98"; g.textAlign = "center";
-  [0, 7, 13].forEach(i => { const t = new Date((S.d - (N - 1 - i)) * DAY); g.fillText(i === 13 ? "сегодня" : `${t.getUTCDate()}.${String(t.getUTCMonth() + 1).padStart(2, "0")}`, L + i * bw + bw / 2, h - 9); });
+  g.fillStyle = THEME === "light" ? "#9A6A00" : "#F2C14E"; g.textAlign = "left"; g.fillText("норма " + fmt(nominal, cf.dec), L + 4, yn - 8);
+  const today = THEME === "light" ? "rgba(0,0,0,.08)" : "rgba(255,255,255,.18)", ink = THEME === "light" ? "#1D2326" : "#EEEAE0";
+  vals.forEach((v, i) => { const bh = (h - B - T) * v / top, x = L + i * bw + 2, bwi = bw - 4, last = i === N - 1;
+    g.fillStyle = last ? today : color; g.fillRect(x, h - B - bh, bwi, bh);
+    if (last) { g.strokeStyle = color; g.strokeRect(x + 0.5, h - B - bh + 0.5, bwi - 1, bh - 1); }
+    if (hoverBar.id === id && hoverBar.i === i) { g.strokeStyle = ink; g.lineWidth = 2; g.strokeRect(x + 1, h - B - bh + 1, bwi - 2, bh - 2); g.lineWidth = 1; }
+    // число на столбике: поперёк, если влезает, иначе вдоль столбика
+    const txt = fmt(v, cf.dec); g.font = "600 11px 'JetBrains Mono', monospace"; const tw = g.measureText(txt).width;
+    g.fillStyle = last ? ink : "#FFFFFF";
+    if (tw + 4 <= bwi) { g.textAlign = "center"; const ty = bh > 22 ? h - B - bh + 10 : h - B - bh - 8; if (bh <= 22) g.fillStyle = ink; g.fillText(txt, x + bwi / 2, ty); }
+    else if (bh > tw + 8) { g.save(); g.translate(x + bwi / 2, h - B - bh + 5); g.rotate(Math.PI / 2); g.textAlign = "left"; g.fillText(txt, 0, 0); g.restore(); }
+    else { g.save(); g.translate(x + bwi / 2, h - B - bh - 4); g.rotate(-Math.PI / 2); g.textAlign = "left"; g.fillStyle = ink; g.fillText(txt, 0, 0); g.restore(); } });
+  // даты под каждым столбиком: число месяца; «сегодня» прижато к правому краю
+  g.font = "500 11px 'JetBrains Mono', monospace"; g.fillStyle = "#9A9F98";
+  days.forEach((dd, i) => { const t = new Date(dd * DAY), last = i === N - 1, x = L + i * bw + bw / 2;
+    if (last) { g.textAlign = "right"; g.fillText("сег.", w - 4, h - 9); return; }
+    if (bw < 18 && i % 2) return; g.textAlign = "center"; g.fillText(bw >= 36 ? `${t.getUTCDate()}.${String(t.getUTCMonth() + 1).padStart(2, "0")}` : String(t.getUTCDate()), x, h - 9); });
 }
-$("foot").textContent = `Нормы из финмодели проекта: активированный уголь ${fmt(D.acDay * 365)} т/год (≈${fmt(D.acDay, 1)} т в сутки, по $${fmt(D.priceAC)}/т), ` +
+// подсказка при наведении или нажатии: дата, сколько и чего, во что превращается, сколько стоит
+let hoverBar = { id: null, i: -1 };
+const MONG = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+function barTip(c, e) {
+  const m = c._m; if (!m) return; const r = c.getBoundingClientRect(), x = e.clientX - r.left, i = Math.floor((x - m.L) / m.bw);
+  const tip = c.parentElement.querySelector(".ctip");
+  if (i < 0 || i >= m.N) { tip.hidden = true; hoverBar = { id: null, i: -1 }; lastChart = -1; return; }
+  const cf = CH[c.id], v = m.vals[i], t = new Date(m.days[i] * DAY), last = i === m.N - 1, money = v * cf.price();
+  const pct = Math.round((last ? v / (m.nominal * m.h / 24) : v / m.nominal) * 100 - 100);
+  tip.innerHTML = `<b>${last ? `Сегодня к ${hhmm(m.h)}` : `${t.getUTCDate()} ${MONG[t.getUTCMonth()]}`}</b>` +
+    `<span class="v">${fmt(v, cf.dec)} ${cf.what}</span>` +
+    `<span>${cf.extra(v)}</span>` +
+    `<span>${cf.cost ? "стоимость сырья" : "выручка"} ≈ $${fmt(Math.round(money / 100) * 100)}</span>` +
+    `<span class="n">${last ? `к концу суток ≈ ${fmt(m.nominal * dayF(m.days[i], m.key), cf.dec)} т` : `норма ${fmt(m.nominal, cf.dec)} т · ${pct >= 0 ? "+" : ""}${pct}%`}</span>`;
+  tip.hidden = false;
+  const tw = tip.offsetWidth, left = clamp(x - tw / 2, 4, r.width - tw - 4); tip.style.left = left + "px";
+  if (hoverBar.id !== c.id || hoverBar.i !== i) { hoverBar = { id: c.id, i }; lastChart = -1; }
+}
+document.querySelectorAll("canvas.chart").forEach(c => {
+  const tip = document.createElement("div"); tip.className = "ctip"; tip.hidden = true; c.parentElement.appendChild(tip);
+  c.addEventListener("pointermove", e => barTip(c, e)); c.addEventListener("click", e => barTip(c, e));
+  c.addEventListener("pointerleave", () => { tip.hidden = true; hoverBar = { id: null, i: -1 }; lastChart = -1; });
+});
+$("foot").textContent = `На графиках число на столбике — сколько тонн сделано за сутки; наведите мышь или нажмите на столбик — покажет дату, во что это превращается и выручку. Нормы из финмодели проекта: активированный уголь ${fmt(D.acDay * 365)} т/год (≈${fmt(D.acDay, 1)} т в сутки, по $${fmt(D.priceAC)}/т), ` +
   `кальянные кубики ${D.cubeMonth} т/мес (по $${fmt(D.priceCube)}/т), древесный уксус ${D.cubeMonth} т/мес (по $${fmt(D.priceWv)}/т, из них ${D.refMonth} т очищенного по $${fmt(D.priceRef)}/т), ` +
   `брикеты барбекю ${fmt(D.bbqMonth)} т/мес (по $${fmt(D.priceBbq)}/т); за год выручка $${fmt(D.revYear / 1e6, 2)} млн и EBITDA $${fmt(D.ebYear / 1e6, 1)} млн — как в финмодели на 2029 год. Скорлупа с барж ≈${fmt(D.shellAU + D.shellB1)} т в сутки (по $${fmt(D.priceShell)}/т с доставкой). ` +
   `Сутки отличаются от нормы на ±7%. Имена рабочих, названия барж и номера фур вымышлены; 20 рабочих в смену (3 смены) и 2 в офисе, часы считаются по графику смен. Планировка — 3D-эскиз генплана, оборудование — эскиз до проекта.`;
