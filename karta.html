@@ -512,22 +512,25 @@ const cv = $("map"), ctx = cv.getContext("2d"), box = $("mapbox");
 let W = 0, H = 0, dpr = 1, k = 4, cx = 100, cy = 70;
 // площадка во всю ширину, дорога у верхнего края, ниже — река; если реки больше ≈60 м, фабрика чуть крупнее (края площадки могут уйти за рамку)
 let autoFit = true;                    // пока человек сам не двигал карту, вид подстраивается под размер окна
-function fitAll() { autoFit = true; k = W / 202; if (H / k > 178 + 60) k = Math.min(H / (178 + 60), W / 182); if (H / k < 172) k = H / 172;
-  cx = 100; cy = 165 - H / (2 * k); }
+// площадка с полоской реки заполняет всё окно: по ширине и по высоте масштаб свой (растяжка до ×1,8)
+let SY = 1;
+function fitAll() { autoFit = true; let kx = W / 202, ky = H / 192;
+  if (ky > kx * 1.8) ky = kx * 1.8; if (ky < kx * 0.8) kx = ky / 0.8;
+  k = kx; SY = ky / kx; cx = 100; cy = 68; }
 // высота карты по форме фабрики: в узком окне карта не выше самой фабрики — без пустых полос сверху и снизу
 function fitBox() { if (document.fullscreenElement) { box.style.height = ""; return; }
   if (innerWidth > 1000) { box.style.height = Math.max(480, $("side").offsetHeight) + "px"; return; }   // карта на всю высоту правой панели
   const want = Math.round(box.clientWidth * 172 / 202), max = innerWidth > 1000 ? innerHeight - 150 : Math.round(innerHeight * 0.64);
   box.style.height = Math.max(320, Math.min(max, want)) + "px"; }
 function resize() { fitBox(); dpr = Math.min(2, devicePixelRatio || 1); W = box.clientWidth; H = box.clientHeight; cv.width = W * dpr; cv.height = H * dpr; }
-const sx = x => (x - cx) * k + W / 2, sy = y => (cy - y) * k + H / 2;
-const wx = px => (px - W / 2) / k + cx, wy = py => cy - (py - H / 2) / k;
-function zoomAt(f, px, py) { autoFit = false; const x = wx(px), y = wy(py); k = clamp(k * f, Math.min(W / 330, H / 280), 30); cx = x - (px - W / 2) / k; cy = y + (py - H / 2) / k; }
+const sx = x => (x - cx) * k + W / 2, sy = y => (cy - y) * k * SY + H / 2;
+const wx = px => (px - W / 2) / k + cx, wy = py => cy - (py - H / 2) / (k * SY);
+function zoomAt(f, px, py) { autoFit = false; const x = wx(px), y = wy(py); k = clamp(k * f, Math.min(W / 330, H / 280), 30); cx = x - (px - W / 2) / k; cy = y + (py - H / 2) / (k * SY); }
 const ptr = new Map(); let moved = 0, pinch0 = 0;
 cv.addEventListener("pointerdown", e => { cv.setPointerCapture(e.pointerId); ptr.set(e.pointerId, [e.offsetX, e.offsetY]); moved = 0; cv.classList.add("drag");
   if (ptr.size === 2) { const [a, b] = [...ptr.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
 cv.addEventListener("pointermove", e => { if (!ptr.has(e.pointerId)) return; const p = ptr.get(e.pointerId), dx = e.offsetX - p[0], dy = e.offsetY - p[1];
-  if (ptr.size === 1) { cx -= dx / k; cy += dy / k; moved += Math.abs(dx) + Math.abs(dy); if (moved > 6) autoFit = false; }
+  if (ptr.size === 1) { cx -= dx / k; cy += dy / (k * SY); moved += Math.abs(dx) + Math.abs(dy); if (moved > 6) autoFit = false; }
   ptr.set(e.pointerId, [e.offsetX, e.offsetY]);
   if (ptr.size === 2) { const [a, b] = [...ptr.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch0) zoomAt(d / pinch0, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2); pinch0 = d; moved = 99; } });
 const up = e => { if (ptr.size === 1 && moved < 6) pick(e.offsetX, e.offsetY); ptr.delete(e.pointerId); if (ptr.size < 2) pinch0 = 0; if (!ptr.size) cv.classList.remove("drag"); };
@@ -629,7 +632,7 @@ function label(x, y, text, size, color) {
   ctx.font = `600 ${size}px Oswald, "Arial Narrow", sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.lineWidth = 3.2; ctx.strokeStyle = "rgba(0,0,0,.85)"; ctx.strokeText(text, sx(x), sy(y)); ctx.fillStyle = color || "#EEEAE0"; ctx.fillText(text, sx(x), sy(y));
 }
-const wrect = (x, y, w, d, c) => { ctx.fillStyle = c; ctx.fillRect(sx(x), sy(y + d), w * k, d * k); };
+const wrect = (x, y, w, d, c) => { ctx.fillStyle = c; ctx.fillRect(sx(x), sy(y + d), w * k, d * k * SY); };
 // человек сверху: плечи в спецовке и каска цвета смены; не меньше 3 px, чтобы было видно на общем плане
 function person(x, y, hat) { const r = Math.max(3, 0.75 * k); ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.beginPath(); ctx.arc(sx(x) + 1.5, sy(y) + 1.5, r, 0, 7); ctx.fill();
   ctx.fillStyle = "#2E6FB0"; ctx.beginPath(); ctx.ellipse(sx(x), sy(y), r, r * 0.72, 0, 0, 7); ctx.fill();
@@ -676,7 +679,7 @@ function frame() {
   const ms = simNow(), S = state(ms), h = S.h, night = h < 5.6 || h > 18.4 ? 1 : h < 6.4 ? (6.4 - h) / 0.8 : h > 17.6 ? (h - 17.6) / 0.8 : 0;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.fillStyle = P.bg; ctx.fillRect(0, 0, W, H);
   ctx.imageSmoothingEnabled = true;
-  ctx.setTransform(dpr * k, 0, 0, -dpr * k, dpr * (W / 2 - cx * k), dpr * (H / 2 + cy * k));
+  ctx.setTransform(dpr * k, 0, 0, -dpr * k * SY, dpr * (W / 2 - cx * k), dpr * (H / 2 + cy * k * SY));
   drawStatic(ctx, { x0: wx(0), x1: wx(W), y0: wy(H), y1: wy(0) });
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
@@ -810,7 +813,7 @@ function drawRadar(S) {
   D.scene.forEach(o => { if (!o.w) return; rx.fillStyle = "#6E7780"; rx.fillRect(X(o.x), Y(o.y + o.d), o.w * s, o.d * s); });
   S.barges.forEach(q => { if (q.on) { rx.fillStyle = "#7FC8D8"; rx.fillRect(X(q.x) - 3, Y(q.y) - 1.5, 6, 3); } });
   S.trucks.forEach(q => { if (q.on) { rx.fillStyle = "#F0935A"; rx.beginPath(); rx.arc(X(q.x), Y(q.y), 2.4, 0, 7); rx.fill(); } });
-  rx.strokeStyle = "#F2C14E"; rx.lineWidth = 1.4; rx.strokeRect(X(wx(0)), Y(wy(0)), W / k * s, H / k * s);
+  rx.strokeStyle = "#F2C14E"; rx.lineWidth = 1.4; rx.strokeRect(X(wx(0)), Y(wy(0)), W / k * s, H / (k * SY) * s);
   rx.restore(); rx.fillStyle = "#EEEAE0"; rx.font = "600 11px Oswald, sans-serif"; rx.textAlign = "center"; rx.fillText("С", R / 2, 12);
 }
 
